@@ -55,8 +55,8 @@ If your source_assets folder had a folder called "textures" and you only wanted 
 
 You can specify key-value parameters for each asset which are in turn passed to the tool.
 In order to pass these along to the tool, they must be defined in a 'params' block. Here's an example:
-
 Assuming this is an assets entry:
+
 	"fonts/*.ttf":
 	{
 		"tool" : "fonttool",
@@ -68,6 +68,7 @@ Assuming this is an assets entry:
 	}
 
 You can have a tool called "fonttool" that makes use of these parameters as follows:
+
 	"fonttool":
 	{
 		"ftool -i %(src_file_path) %o (%dst_file_noext)s.font -s %(point_size)d -a %(antialiased)d"
