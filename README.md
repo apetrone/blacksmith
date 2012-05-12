@@ -28,21 +28,29 @@ This is a dictionary of tools. Each tool is defined by name to have a list of co
 Here's a contrived example of creating a 'tool' out of the unix cp command.
 
 	'cp': # the name can be anything, but is used to reference the tool from the Assets section.
-	[
-		"cp -r %(src_file_path) %(dst_file_path)"
-	]
+	{
+		"commands" : 
+		[
+			"cp -r %(src_file_path) %(dst_file_path)"
+		]
+	}
 
-This is now a tool called 'cp', which will copy each file to the destination. Note: In this example, this command will fail on Windows because there is no 'cp' command by default. Use of the built-in 'copy' tool is recommended.
+This is now a tool called 'cp', which will copy each file to the destination. 
+Note: In this example, this command will fail on Windows because there is no 'cp' command by default. Use of the built-in 'copy' tool is recommended.
+You can also specify a different tool name per platform (see example config below).
 
 A list of default parameters are accessible for each tool:
 	src_file_path - absolute path to source file
 	src_file_ext - source file's extension
 	dst_file_path - absolute path to destination file (assumes same name as source)
 	dst_file_noext - absolute path to destination file, with no extension
+	platform - "windows", "macosx", "linux" - or anything specified on the command line with -p/--platform
 
 This takes advantage of Python's Dictionary-based string formatting.
 
 At the moment, there is only one built-in tool, "copy". This copies a file from the source to the destination in a cross-platform manner (using python's shutil).
+
+Tools have been recently modified to allow platform-specific tool names.
 
 ## Assets
 The "key" in this section, should be a relative-folder name with wild card matching pattern.
@@ -71,7 +79,10 @@ You can have a tool called "fonttool" that makes use of these parameters as foll
 
 	"fonttool":
 	{
-		"ftool -i %(src_file_path) %o (%dst_file_noext)s.font -s %(point_size)d -a %(antialiased)d"
+		"commands" :
+		[
+			"ftool -i %(src_file_path) %o (%dst_file_noext)s.font -s %(point_size)d -a %(antialiased)d"
+		]
 	}
 	
 Also worth noting is that you can change the destination folder name. I keep platform specific files in folders called: "textures.desktop", or "shaders.ios" which I then rename with the asset config to "textures" and "shaders" respectively. This keeps my final resource names uniform, while keeping the source files separate.
@@ -89,9 +100,18 @@ Also worth noting is that you can change the destination folder name. I keep pla
 		"tools" :
 		{
 			"sox" :
-			[
-				"sox -t%(src_file_ext)s %(src_file_path)s %(dst_file_noext)s.%(platform_extension)s"
-			]
+			{
+				"platforms" : 
+				{
+					"linux" : "sox",
+					"macosx" : "sox",
+					"windows" : "sox.exe"
+				},
+				"commands":
+				[
+					"%(tool)s -t%(src_file_ext)s %(src_file_path)s %(dst_file_noext)s.%(platform_extension)s"
+				]
+			}
 		},
 
 		"assets":
@@ -116,6 +136,14 @@ Also worth noting is that you can change the destination folder name. I keep pla
 			}
 		}
 	}
+
+Invoke the above config with:
+
+	python blacksmith.py -c config.conf
+
+With the optional platform:
+
+	python blacksmith.py -c config -p macosx
 
 # Roadmap
 

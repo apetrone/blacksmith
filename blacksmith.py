@@ -74,13 +74,26 @@ class AttributeStore(object):
 
 class Tool(object):
 	def __init__(self, *args, **kwargs):
-		self.name = kwargs.get( 'name', 'Unknown' )
-		self.commands = kwargs.get( 'commands', [] )
+		self.name = kwargs.get( 'name', None )
+		
+		data = kwargs.get( 'data', None )
+		if data is None:
+			logging.warn( "Tool data missing! Unable to parse tool." )
+			raise Exception( "Missing tool data" )
+
+		self.platforms = data.get( 'platforms', None )
+		self.commands = data.get( 'commands', [] )
 
 	def __str__(self):
 		return 'Tool [Name=%s, Commands=%i]' % (self.name, len(self.commands))
 
 	def execute( self, params ):
+		if self.platforms and params['platform'] in self.platforms:
+			params['tool'] = self.platforms[ params['platform'] ]
+		else:
+			# no platforms specified for this tool, so we default to the tool name
+			params['tool'] = self.name
+
 		for raw_cmd in self.commands:
 			try:
 				cmd = (raw_cmd % params).encode('ascii')
@@ -113,7 +126,7 @@ class AssetFolder(object):
 class UnknownToolException(Exception):
 	pass
 
-def generateParamsForFile( paths, asset, src_file_path ):
+def generateParamsForFile( paths, asset, src_file_path, platform_name ):
 	# base parameters are from the asset block
 	params = asset.params
 
@@ -125,6 +138,8 @@ def generateParamsForFile( paths, asset, src_file_path ):
 	params['dst_file_path'] = os.path.join( paths.compiled_assets, asset.dst_folder, basename )
 	params['dst_file_noext'] = os.path.join( paths.compiled_assets, asset.dst_folder, basename.split('.')[0] )
 	
+
+	params['platform'] = platform_name
 
 	# setup commands - this needs to be moved to an external .conf
 	cmd_move = ''
@@ -163,6 +178,7 @@ def main():
 	p = argparse.ArgumentParser()
 	p.add_argument( '-c', '--config', dest='config_path', metavar='CONFIG_FILE_PATH', help = 'Path to configuration file to use when converting assets', required=True )
 	p.add_argument( '-l', '--loglevel', dest='log_level' )
+	p.add_argument( '-p', '--platform', dest='platform' )
 	args = p.parse_args()
 
 	# load config
@@ -175,6 +191,10 @@ def main():
 	if args.log_level not in log_levels:
 		logging.error( 'Unknown log level: %s' % args.log_level )
 	logging.basicConfig( level=log_levels[ args.log_level ] )
+
+	if not args.platform:
+		args.platform = get_platform()
+		logging.info( "Platform defaulting to: %s" % args.platform )
 
 	# conform all paths
 	if getattr(config, 'paths', None):
@@ -200,12 +220,12 @@ def main():
 	
 	# parse all tools
 	for name in config.tools:
-		tool = Tool( name=name, commands=config.tools[name] )
+		tool = Tool( name=name, data=config.tools[name] )
 		tools[ name ] = tool
 	logging.info( "Loaded %i tools." % len(tools.items()) )
 
 	# add internal tools
-	tools[ 'copy' ] = CopyCommand(name='copy')
+	tools[ 'copy' ] = CopyCommand(name='copy', data={})
 
 	# parse asset folders
 	for asset_glob in config.assets:
@@ -233,7 +253,7 @@ def main():
 
 			for src_file_path in iglob( search_path ):
 				#logging.info( "-> %s" % src_file_path )
-				params = generateParamsForFile( settings.paths, asset, src_file_path )
+				params = generateParamsForFile( settings.paths, asset, src_file_path, args.platform )
 				tool.execute( params )
 		except UnknownToolException as e:
 			logging.warn( e.message )
