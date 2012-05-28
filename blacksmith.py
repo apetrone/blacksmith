@@ -8,6 +8,9 @@ import re
 import argparse
 import logging
 from glob import iglob
+import time
+#from watchdog.events import FileSystemEventHandler
+#from watchdog.observers import Observer
 
 def makeDirsNoExcept( target_path, chmod=0775 ):
 	try:
@@ -164,6 +167,22 @@ class CopyCommand(Tool):
 		except IOError as e:
 			logging.info( 'IOError: %s' % e )
 
+# if the file is not in the cache, return 0
+# if the file is IN the cache and modified, return 1
+# if the file is IN the cache, but not modified, return 2
+def sourceFileCacheStatus( path, cache ):
+	if path in cache:
+		cached_modified = cache[path]
+		modified = os.path.getmtime( path )
+		if modified <= cached_modified:
+			return 2
+		else:
+			return 1
+	return 0
+
+def updateCache( path, cache ):
+	cache[path] = os.path.getmtime( path )
+
 def main():
 	commands = {}
 	config = None
@@ -171,6 +190,8 @@ def main():
 	settings = AttributeStore()
 	tools = {}
 	asset_folders = []
+	cache = {}
+	alter_code = {0: 'A', 1:'M'}
 	log_levels = {
 		'debug' : logging.DEBUG,
 		'info' : logging.INFO,
@@ -188,6 +209,7 @@ def main():
 	if os.path.exists( args.config_path ):
 		config = loadConfig( args.config_path )
 
+
 	# sort out the log level (there is probably a better way to do this?)
 	if args.log_level == None:
 		args.log_level = 'info'
@@ -198,6 +220,16 @@ def main():
 	if not args.platform:
 		args.platform = get_platform()
 		logging.info( "Platform defaulting to: %s" % args.platform )
+
+	# load cache
+	cache_path = os.path.splitext( args.config_path )[0] + '.cache'
+	logging.info( 'Reading cache from %s...' % cache_path )
+	if os.path.exists( cache_path ):
+		file = open( cache_path, "rb" )
+		cache = json.load( file )
+		file.close()
+	else:
+		logging.warn( "No cache at %s" % cache_path )
 
 	# conform all paths
 	if getattr(config, 'paths', None):
@@ -241,6 +273,8 @@ def main():
 	# loop through each asset path and glob
 	# run the tool associated with each file
 	logging.info( "Running tools on assets..." )
+	total_files = 0
+	modified_files = 0
 	for asset in asset_folders:
 		try:
 			search_path = os.path.join(asset.abs_src_folder, asset.glob)
@@ -255,13 +289,31 @@ def main():
 			makeDirsNoExcept( asset.abs_dst_folder )
 
 			for src_file_path in iglob( search_path ):
-				#logging.info( "-> %s" % src_file_path )
+				total_files += 1
+
+				cache_status = sourceFileCacheStatus( src_file_path, cache )
+				if cache_status == 2:
+					continue
+
+				logging.info( "%c -> %s" % (alter_code[cache_status], src_file_path) )
+				modified_files += 1
+				# make sure we update the file cache
+				updateCache( src_file_path, cache )
+
 				params = generateParamsForFile( settings.paths, asset, src_file_path, args.platform )
 				tool.execute( params )
+
 		except UnknownToolException as e:
 			logging.warn( e.message )
 			continue
 
+	# write cache to file
+	logging.info( "Writing cache %s..." % cache_path )
+	file = open( cache_path, "wb" )
+	file.write( json.dumps(cache, indent=4) )
+	file.close()
+
 	logging.info( "Complete." )
+	logging.info( "Modified / Total - %i/%i" % (modified_files, total_files) )
 if __name__ == "__main__":
 	main()
