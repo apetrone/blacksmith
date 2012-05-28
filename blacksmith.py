@@ -145,10 +145,13 @@ def generateParamsForFile( paths, asset, src_file_path, platform_name ):
 	cmd_move = ''
 	if get_platform() == 'windows':
 		cmd_move = 'move'
+		cmd_copy = 'copy'
 	else:
 		cmd_move = 'mv'
+		cmd_copy = 'cp'
 
 	params['cmd_move'] = cmd_move
+	params['cmd_copy'] = cmd_copy
 
 	return params
 
