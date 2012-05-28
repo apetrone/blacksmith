@@ -148,5 +148,4 @@ With the optional platform:
 # Roadmap
 
 - Add a mode to facilitate directory watching (perhaps with watchdog?) such that you can leave this running while working and it will automatically pickup and convert any changes for you.
-- Implement a caching mechanism such that only newly modified files will be converted each run.
 - Improve support for cross-platform tools or commands. In this context, commands could be used by tools.
