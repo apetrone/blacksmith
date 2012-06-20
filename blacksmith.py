@@ -191,7 +191,7 @@ def main():
 	tools = {}
 	asset_folders = []
 	cache = {}
-	alter_code = {0: 'A', 1:'M'}
+	alter_code = {0: 'A', 1:'M', 2:'O'}
 	log_levels = {
 		'debug' : logging.DEBUG,
 		'info' : logging.INFO,
@@ -203,6 +203,7 @@ def main():
 	p.add_argument( '-c', '--config', dest='config_path', metavar='CONFIG_FILE_PATH', help = 'Path to configuration file to use when converting assets', required=True )
 	p.add_argument( '-l', '--loglevel', dest='log_level' )
 	p.add_argument( '-p', '--platform', dest='platform' )
+	p.add_argument( '-y', '--clear-cache', dest='clear_cache', action='store_true' )
 	args = p.parse_args()
 
 	# load config
@@ -223,12 +224,17 @@ def main():
 
 	# load cache
 	cache_path = os.path.splitext( args.config_path )[0] + '.cache'
-	logging.info( 'Reading cache from %s...' % cache_path )
+
+	if args.clear_cache and os.path.exists( cache_path ):
+		logging.info( 'clearing cache at %s' % cache_path )
+		os.unlink( cache_path )
+	
 	if os.path.exists( cache_path ):
+		logging.info( 'Reading cache from %s...' % cache_path )
 		file = open( cache_path, "rb" )
 		cache = json.load( file )
 		file.close()
-	else:
+	elif not args.clear_cache:
 		logging.warn( "No cache at %s" % cache_path )
 
 	# conform all paths
