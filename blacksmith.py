@@ -241,7 +241,7 @@ def main():
 	if getattr(config, 'paths', None):
 		for path in config.paths:
 			key = path
-			if type(config.paths[key]) is unicode:
+			if type(config.paths[key]) is unicode or type(config.paths[key]) is str:
 				value = util_cleanPath( config.paths[key] )
 			elif type(config.paths[key]) is list:
 				path_list = config.paths[key]
@@ -249,7 +249,7 @@ def main():
 					path = util_cleanPath( path )
 				value = path_list
 			else:
-				raise Exception('Unknown path type! %s' % type(config.paths[key]) )
+				raise Exception('Unknown path type! key: %s -> %s' % (key, type(config.paths[key])) )
 			
 			#logging.info( "* %s -> %s" % (key, value) )
 			config.paths[ key ] = value
