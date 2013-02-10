@@ -291,10 +291,14 @@ def main():
 			else:
 				raise UnknownToolException( 'Unknown tool "%s"' % asset.tool )
 
-			# make all asset destination folders
-			makeDirsNoExcept( asset.abs_dst_folder )
+			path_created = False
 
 			for src_file_path in iglob( search_path ):
+				if not path_created:
+					path_created = True
+					# make all asset destination folders
+					makeDirsNoExcept( asset.abs_dst_folder )
+
 				total_files += 1
 
 				cache_status = sourceFileCacheStatus( src_file_path, cache )
