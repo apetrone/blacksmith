@@ -11,7 +11,10 @@ The solution is to have a script process everything and put it in the correct pl
 # Usage
 
 Write an assetconfig file and then point blacksmith to it.
+
 You specify asset directories relative to the source_assets folder. In doing so, you also provide a wild card to match files. For each file in this directory that matches the wild card, a 'tool' will be executed on that file.
+
+You can define a separate tools configuration if you need to call custom commandline tools. (See the example below)
 
 # Asset Config Files
 
@@ -24,7 +27,7 @@ compiled_assets - root where the 'final' version of the files will be placed
 tool_path - This can be a single string or list of strings to append to the PATH environment variable when executing tools
 
 ## Tools
-This is a dictionary of tools. Each tool is defined by name to have a list of commands that are executed (as if they were a batch or shell script).
+Each tool is defined by name to have a list of commands that are executed (as if they were a batch or shell script).
 Here's a contrived example of creating a 'tool' out of the unix cp command.
 
 	'cp': # the name can be anything, but is used to reference the tool from the Assets section.
@@ -40,6 +43,7 @@ Note: In this example, this command will fail on Windows because there is no 'cp
 You can also specify a different tool name per platform (see example config below).
 
 A list of default parameters are accessible for each tool:
+
 	src_file_path - absolute path to source file
 	src_file_ext - source file's extension
 	dst_file_path - absolute path to destination file (assumes same name as source)
@@ -49,8 +53,6 @@ A list of default parameters are accessible for each tool:
 This takes advantage of Python's Dictionary-based string formatting.
 
 At the moment, there is only one built-in tool, "copy". This copies a file from the source to the destination in a cross-platform manner (using python's shutil).
-
-Tools have been recently modified to allow platform-specific tool names.
 
 ## Assets
 The "key" in this section, should be a relative-folder name with wild card matching pattern.
@@ -97,22 +99,7 @@ Also worth noting is that you can change the destination folder name. I keep pla
 			"tool_path" : "tools/bin"
 		},
 
-		"tools" :
-		{
-			"sox" :
-			{
-				"platforms" : 
-				{
-					"linux" : "sox",
-					"macosx" : "sox",
-					"windows" : "sox.exe"
-				},
-				"commands":
-				[
-					"%(tool)s -t%(src_file_ext)s %(src_file_path)s %(dst_file_noext)s.%(platform_extension)s"
-				]
-			}
-		},
+		"tools" : "tools.conf",
 
 		"assets":
 		{
@@ -134,6 +121,23 @@ Also worth noting is that you can change the destination folder name. I keep pla
 					"platform_extension" : "ogg"
 				}
 			}
+		}
+	}
+
+## Example accompanying tools.conf
+	{
+		"sox" :
+		{
+			"platforms" : 
+			{
+				"linux" : "sox",
+				"macosx" : "sox",
+				"windows" : "sox.exe"
+			},
+			"commands":
+			[
+				"%(tool)s -t%(src_file_ext)s %(src_file_path)s %(dst_file_noext)s.%(platform_extension)s"
+			]
 		}
 	}
 

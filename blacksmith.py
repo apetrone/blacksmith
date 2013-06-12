@@ -46,9 +46,8 @@ def runAsShell():
 	return is_shell
 
 def loadConfig(path):
-	file = open( path, "rb" )
-	cfg = json.load( file )
-	file.close()
+	with open(path, "rb") as file:
+		cfg = json.load( file )
 	return AttributeStore( cfg )
 
 def setupEnvironment( paths ):
@@ -204,23 +203,31 @@ def main():
 	p.add_argument( '-l', '--loglevel', dest='log_level' )
 	p.add_argument( '-p', '--platform', dest='platform' )
 	p.add_argument( '-y', '--clear-cache', dest='clear_cache', action='store_true' )
+	# p.add_argument( '-t', '--tools', dest='tools_path', metavar='TOOLS_FILE_PATH', help = 'Path to file containing a list of tools (in JSON). Overrides path specified in configuration.' )
 	args = p.parse_args()
 
 	# load config
 	if os.path.exists( args.config_path ):
 		config = loadConfig( args.config_path )
 
-
 	# sort out the log level (there is probably a better way to do this?)
 	if args.log_level == None:
 		args.log_level = 'info'
 	if args.log_level not in log_levels:
 		logging.error( 'Unknown log level: %s' % args.log_level )
+
+	# initialize logging
 	logging.basicConfig( level=log_levels[ args.log_level ] )
 
 	if not args.platform:
 		args.platform = get_platform()
 		logging.info( "Platform defaulting to: %s" % args.platform )
+
+	# attempt to load the tools via the tool path
+	if config.tools:
+		abs_tools_path = os.path.abspath( config.tools )
+		logging.info( "Importing tools from %s..." % abs_tools_path )
+		config.tools = loadConfig( abs_tools_path )
 
 	# load cache
 	cache_path = os.path.splitext( args.config_path )[0] + '.cache'
@@ -260,8 +267,8 @@ def main():
 	setupEnvironment( config.paths )
 	
 	# parse all tools
-	for name in config.tools:
-		tool = Tool( name=name, data=config.tools[name] )
+	for name, data in config.tools:
+		tool = Tool( name=name, data=data )
 		tools[ name ] = tool
 	logging.info( "Loaded %i tools." % len(tools.items()) )
 
