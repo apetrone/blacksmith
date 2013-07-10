@@ -25,6 +25,7 @@ There are three paths that are required when writing this file.
 source_assets - root where the source assets can be found.
 compiled_assets - root where the 'final' version of the files will be placed
 tool_path - This can be a single string or list of strings to append to the PATH environment variable when executing tools
+NOTE: These paths are now RELATIVE to the specified configuration file.
 
 ## Tools
 Each tool is defined by name to have a list of commands that are executed (as if they were a batch or shell script).

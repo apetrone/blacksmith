@@ -12,6 +12,8 @@ import time
 #from watchdog.events import FileSystemEventHandler
 #from watchdog.observers import Observer
 
+included_configs = []
+
 def makeDirsNoExcept( target_path, chmod=0775 ):
 	try:
 		os.makedirs( target_path, chmod )
@@ -24,8 +26,8 @@ def stripTrailingSlash( path ):
 	return path
 
 def util_cleanPath( path ):
-	path = stripTrailingSlash( path )
-	return os.path.normpath( os.path.abspath(path) )
+	return stripTrailingSlash( path )
+	#return os.path.normpath( os.path.abspath(path) )
 
 def get_platform():
 	p = platform.platform().lower()
@@ -45,10 +47,32 @@ def runAsShell():
 		is_shell = True
 	return is_shell
 
+
 def loadConfig(path):
-	with open(path, "rb") as file:
-		cfg = json.load( file )
-	return AttributeStore( cfg )
+	config = None
+	path = os.path.abspath(path)
+	if os.path.exists( path ) and (path not in included_configs):
+		included_configs.append(path)
+
+		with open(path, "rb") as file:
+			cfg = json.load( file )
+		
+		config = AttributeStore( cfg )
+
+		if getattr(config, "include", None):
+			# assume an include is relative
+			base_path = os.path.dirname(path)
+			config_path = os.path.abspath( os.path.join(base_path,config.include) )
+			newconfig = loadConfig(config_path)
+
+			if newconfig:
+				newconfig.merge(config)
+				return newconfig
+
+	else:
+		logging.error( "loadConfig: config '%s' does not exist or was already included." % path )
+
+	return config
 
 def setupEnvironment( paths ):
 	# add asset_path to PATH environment var
@@ -71,9 +95,20 @@ class AttributeStore(object):
 		for i in self.__dict__.items():
 			yield i
 
-
-
-
+	def merge(self, other):
+		for key, value in other.__dict__.iteritems():
+			attrib = getattr(self, key, None)
+			if attrib:
+				if type(value) == list and type(attrib) == list:
+					attrib.extend(value)
+				elif type(value) == dict and type(attrib) == dict:
+					attrib.update(value)
+				elif type(attrib) == unicode or type(attrib) == str:
+					attrib = value
+				else:
+					raise Exception( "Unknown conflict types '%s' <-> '%s'!" % (type(attrib), type(value)) )
+			else:
+				self.__dict__[key] = value
 class Tool(object):
 	def __init__(self, *args, **kwargs):
 		self.name = kwargs.get( 'name', None )
@@ -206,10 +241,6 @@ def main():
 	# p.add_argument( '-t', '--tools', dest='tools_path', metavar='TOOLS_FILE_PATH', help = 'Path to file containing a list of tools (in JSON). Overrides path specified in configuration.' )
 	args = p.parse_args()
 
-	# load config
-	if os.path.exists( args.config_path ):
-		config = loadConfig( args.config_path )
-
 	# sort out the log level (there is probably a better way to do this?)
 	if args.log_level == None:
 		args.log_level = 'info'
@@ -219,13 +250,17 @@ def main():
 	# initialize logging
 	logging.basicConfig( level=log_levels[ args.log_level ] )
 
+	# load config
+	config = loadConfig( args.config_path )
+
 	if not args.platform:
 		args.platform = get_platform()
 		logging.info( "Platform defaulting to: %s" % args.platform )
 
 	# attempt to load the tools via the tool path
 	if config.tools:
-		abs_tools_path = os.path.abspath( config.tools )
+		base_path = os.path.dirname(args.config_path)
+		abs_tools_path = os.path.abspath( os.path.join(base_path,config.tools) )
 		logging.info( "Importing tools from %s..." % abs_tools_path )
 		config.tools = loadConfig( abs_tools_path )
 
@@ -246,20 +281,23 @@ def main():
 
 	# conform all paths
 	if getattr(config, 'paths', None):
-		for path in config.paths:
-			key = path
+		base_path = os.path.dirname( os.path.abspath(args.config_path) )
+
+		for key in config.paths:
 			if type(config.paths[key]) is unicode or type(config.paths[key]) is str:
 				value = util_cleanPath( config.paths[key] )
+				value = os.path.abspath( os.path.join(base_path,value) )
 			elif type(config.paths[key]) is list:
 				path_list = config.paths[key]
 				for path in path_list:
 					path = util_cleanPath( path )
+					path = os.path.abspath( os.path.join(base_path,path) )
 				value = path_list
 			else:
 				raise Exception('Unknown path type! key: %s -> %s' % (key, type(config.paths[key])) )
 			
-			#logging.info( "* %s -> %s" % (key, value) )
 			config.paths[ key ] = value
+			#logging.info( "* %s -> %s" % (key, value) )
 
 		setattr(settings, 'paths', AttributeStore( config.paths ) )
 
