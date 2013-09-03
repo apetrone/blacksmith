@@ -258,8 +258,10 @@ def main():
 		logging.info( "Platform defaulting to: %s" % args.platform )
 
 	# attempt to load the tools via the tool path
-	if config.tools:
+	if config.tools and (type(config.tools) == str or type(config.tools) == unicode):
 		base_path = os.path.dirname(args.config_path)
+		#logging.info( "base_path = %s" % base_path )
+		#logging.info( "config.tools = %s" % config.tools )
 		abs_tools_path = os.path.abspath( os.path.join(base_path,config.tools) )
 		logging.info( "Importing tools from %s..." % abs_tools_path )
 		config.tools = loadConfig( abs_tools_path )
@@ -305,9 +307,13 @@ def main():
 	setupEnvironment( config.paths )
 	
 	# parse all tools
-	for name, data in config.tools:
-		tool = Tool( name=name, data=data )
-		tools[ name ] = tool
+	if type(config.tools) == dict:
+		for name in config.tools:
+			tool = Tool( name=name, data=config.tools[name] )
+	else:
+		for name, data in config.tools:
+			tool = Tool( name=name, data=data )
+			tools[ name ] = tool
 	logging.info( "Loaded %i tools." % len(tools.items()) )
 
 	# add internal tools
