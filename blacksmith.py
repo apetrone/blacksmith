@@ -138,7 +138,7 @@ class Tool(object):
 				logging.error( raw_cmd )
 				logging.error( params )
 
-			#logging.debug( cmd )
+			#logging.info( cmd )
 			runnable = shlex.split( cmd )
 
 			try:			
@@ -171,10 +171,15 @@ def generateParamsForFile( paths, asset, src_file_path, platform_name ):
 
 	# default parameters
 	params['src_file_path'] = src_file_path
+	params["src_file_basename"] = basename
 	params['src_file_ext'] = os.path.basename(src_file_path).split('.')[1]
+
 	params['dst_file_path'] = os.path.join( paths.compiled_assets, asset.dst_folder, basename )
 	params['dst_file_noext'] = os.path.join( paths.compiled_assets, asset.dst_folder, basename.split('.')[0] )
 	
+
+	params["abs_src_folder"] = asset.abs_src_folder
+	params["abs_dst_folder"] = asset.abs_dst_folder
 
 	params['platform'] = platform_name
 
@@ -310,6 +315,7 @@ def main():
 	if type(config.tools) == dict:
 		for name in config.tools:
 			tool = Tool( name=name, data=config.tools[name] )
+			tools[ name ] = tool
 	else:
 		for name, data in config.tools:
 			tool = Tool( name=name, data=data )
