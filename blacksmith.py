@@ -291,48 +291,65 @@ def main():
 	modified_files = 0
 	for asset in asset_folders:
 		try:
-			search_path = os.path.join(asset.abs_src_folder, asset.glob)
-			logging.debug( "Processing: \"%s\"" % search_path )
+			search_path = os.path.join(
+				asset.abs_src_folder, 
+				asset.glob
+			)
+			logging.debug("Processing: \"%s\"" % search_path)
 			
 			if tools.has_key( asset.tool ):
 				tool = tools[ asset.tool ]
 			else:
-				raise UnknownToolException( "Unknown tool \"%s\"" % asset.tool )
+				raise UnknownToolException(
+					"Unknown tool \"%s\"" % asset.tool
+				)
 
 			path_created = False
 
-			for src_file_path in iglob( search_path ):
+			for src_file_path in iglob(search_path):
 				if not path_created:
 					path_created = True
 					# make all asset destination folders
-					make_dirs( asset.abs_dst_folder )
+					make_dirs(asset.abs_dst_folder)
 
 				total_files += 1
 
-				cache_status = source_file_cache_status( src_file_path, cache )
+				cache_status = source_file_cache_status(
+					src_file_path,
+					cache
+				)
 				if cache_status == 2:
 					continue
 
-				logging.info( "%c -> %s" % (alter_code[cache_status], src_file_path) )
+				logging.info(
+					"%c -> %s" %
+				 	(alter_code[cache_status], src_file_path)
+				)
 				modified_files += 1
-				# make sure we update the file cache
-				update_cache( src_file_path, cache )
 
-				params = generate_params_for_file( settings.paths, asset, src_file_path, args.platform )
-				tool.execute( params )
+				# make sure we update the file cache
+				update_cache(src_file_path, cache)
+
+				params = generate_params_for_file(
+					settings.paths, 
+					asset,
+					src_file_path,
+					args.platform
+				)
+				tool.execute(params)
 
 		except UnknownToolException as e:
-			logging.warn( e.message )
+			logging.warn(e.message)
 			continue
 
 	# write cache to file
-	logging.info( "Writing cache %s..." % cache_path )
-	file = open( cache_path, "wb" )
-	file.write( json.dumps(cache, indent=4) )
+	logging.info("Writing cache %s..." % cache_path)
+	file = open(cache_path, "wb")
+	file.write(json.dumps(cache, indent=4))
 	file.close()
 
-	logging.info( "Complete." )
-	logging.info( "Modified / Total - %i/%i" % (modified_files, total_files) )
+	logging.info("Complete.")
+	logging.info("Modified / Total - %i/%i" % (modified_files, total_files))
 
 if __name__ == "__main__":
 	main()
