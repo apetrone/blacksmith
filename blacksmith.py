@@ -14,19 +14,32 @@ import time
 
 included_configs = []
 
-def makeDirsNoExcept( target_path, chmod=0775 ):
+def make_dirs(target_path, chmod=0775):
 	try:
-		os.makedirs( target_path, chmod )
-	except:
+		os.makedirs(target_path, chmod)
+
+	except OSError as exc:
+		if exc.errno == 20:
+			logging.error("Attempted to make a path: \"%s\", but ran "
+				"into a file with the name of an expected directory." % path)
+			logging.error("Check for files that have the same name of the "
+				"directory you may want to create."
+			)
+			raise
+
+		# OSError: [Errno 17] File exists:
 		pass
 
-def stripTrailingSlash( path ):
+	except:
+		raise
+
+def strip_trailing_slash( path ):
 	if path[-1] == '/' or path[-1] == '\\':
 		path = path[:-1]
 	return path
 
-def util_cleanPath( path ):
-	return stripTrailingSlash( path )
+def clean_path( path ):
+	return strip_trailing_slash( path )
 	#return os.path.normpath( os.path.abspath(path) )
 
 def get_platform():
@@ -41,14 +54,14 @@ def get_platform():
 	else:
 		return "unknown"
 
-def runAsShell():
+def run_as_shell():
 	is_shell = False
 	if get_platform() == "windows":
 		is_shell = True
 	return is_shell
 
 
-def loadConfig(path):
+def load_config(path):
 	config = None
 	path = os.path.abspath(path)
 	if os.path.exists( path ) and (path not in included_configs):
@@ -63,14 +76,14 @@ def loadConfig(path):
 			# assume an include is relative
 			base_path = os.path.dirname(path)
 			config_path = os.path.abspath( os.path.join(base_path,config.include) )
-			newconfig = loadConfig(config_path)
+			newconfig = load_config(config_path)
 
 			if newconfig:
 				newconfig.merge(config)
 				return newconfig
 
 	else:
-		logging.error( "loadConfig: config '%s' does not exist or was already included." % path )
+		logging.error( "load_config: config '%s' does not exist or was already included." % path )
 
 	return config
 
@@ -142,7 +155,7 @@ class Tool(object):
 			runnable = shlex.split( cmd )
 
 			try:			
-				returncode = subprocess.call( runnable, shell=runAsShell() )
+				returncode = subprocess.call( runnable, shell=run_as_shell() )
 				if returncode != 0:
 					logging.error( "ERROR %s" % cmd )
 			except OSError as e:
@@ -256,7 +269,7 @@ def main():
 	logging.basicConfig( level=log_levels[ args.log_level ] )
 
 	# load config
-	config = loadConfig( args.config_path )
+	config = load_config( args.config_path )
 
 	if not args.platform:
 		args.platform = get_platform()
@@ -269,7 +282,7 @@ def main():
 		#logging.info( "config.tools = %s" % config.tools )
 		abs_tools_path = os.path.abspath( os.path.join(base_path,config.tools) )
 		logging.info( "Importing tools from %s..." % abs_tools_path )
-		config.tools = loadConfig( abs_tools_path )
+		config.tools = load_config( abs_tools_path )
 
 	# load cache
 	cache_path = os.path.splitext( args.config_path )[0] + '.cache'
@@ -292,12 +305,12 @@ def main():
 
 		for key in config.paths:
 			if type(config.paths[key]) is unicode or type(config.paths[key]) is str:
-				value = util_cleanPath( config.paths[key] )
+				value = clean_path( config.paths[key] )
 				value = os.path.abspath( os.path.join(base_path,value) )
 			elif type(config.paths[key]) is list:
 				path_list = config.paths[key]
 				for path in path_list:
-					path = util_cleanPath( path )
+					path = clean_path( path )
 					path = os.path.abspath( os.path.join(base_path,path) )
 				value = path_list
 			else:
@@ -354,7 +367,7 @@ def main():
 				if not path_created:
 					path_created = True
 					# make all asset destination folders
-					makeDirsNoExcept( asset.abs_dst_folder )
+					make_dirs( asset.abs_dst_folder )
 
 				total_files += 1
 
