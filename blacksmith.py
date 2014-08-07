@@ -21,7 +21,8 @@ from models import (
 from util import(
 	get_platform,
 	make_dirs,
-	run_as_shell
+	run_as_shell,
+	type_is_string
 )
 
 included_configs = []
@@ -51,14 +52,19 @@ def load_config(path):
 		if getattr(config, "include", None):
 			# assume an include is relative
 			base_path = os.path.dirname(path)
-			config_path = os.path.abspath(os.path.join(base_path,config.include))
+			config_path = os.path.abspath(
+				os.path.join(base_path,config.include)
+			)
 			newconfig = load_config(config_path)
 
 			if newconfig:
 				newconfig.merge(config)
 				return newconfig
 	else:
-		logging.error("load_config: config \"%s\" does not exist or was already included." % path)
+		logging.error(
+			"load_config: config \"%s\" does not exist or was "
+			"already included." % path
+		)
 
 	return config
 
@@ -72,7 +78,12 @@ def setup_environment(paths):
 	os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
 
 
-def generate_params_for_file(paths, asset, src_file_path, platform_name):
+def generate_params_for_file(
+		paths, 
+		asset, 
+		src_file_path,
+		platform_name
+	):
 	# base parameters are from the asset block
 	params = asset.params
 
@@ -81,10 +92,19 @@ def generate_params_for_file(paths, asset, src_file_path, platform_name):
 	# default parameters
 	params["src_file_path"] = src_file_path
 	params["src_file_basename"] = basename
-	params["src_file_ext"] = os.path.basename(src_file_path).split(".")[1]
+	params["src_file_ext"] = \
+		os.path.basename(src_file_path).split(".")[1]
 
-	params["dst_file_path"] = os.path.join(paths.compiled_assets, asset.dst_folder, basename)
-	params["dst_file_noext"] = os.path.join(paths.compiled_assets, asset.dst_folder, basename.split(".")[0])
+	params["dst_file_path"] = os.path.join(
+		paths.compiled_assets,
+		asset.dst_folder,
+		basename
+	)
+	params["dst_file_noext"] = os.path.join(
+		paths.compiled_assets,
+		asset.dst_folder,
+		basename.split(".")[0]
+	)
 	
 
 	params["abs_src_folder"] = asset.abs_src_folder
@@ -140,103 +160,133 @@ def main():
 	}
 	
 	p = argparse.ArgumentParser()
-	p.add_argument( "-c", "--config", dest="config_path", metavar="CONFIG_FILE_PATH", help = "Path to configuration file to use when converting assets", required=True )
-	p.add_argument( "-l", "--loglevel", dest="log_level" )
-	p.add_argument( "-p", "--platform", dest="platform" )
-	p.add_argument( "-y", "--clear-cache", dest="clear_cache", action="store_true" )
-	# p.add_argument( "-t", "--tools", dest="tools_path", metavar="TOOLS_FILE_PATH", help = "Path to file containing a list of tools (in JSON). Overrides path specified in configuration." )
+	p.add_argument(
+		"-c",
+		"--config", 
+		dest="config_path", 
+		metavar="CONFIG_FILE_PATH",
+		help="Configuration file path to use when converting assets",
+		required=True
+	)
+	p.add_argument(
+		"-l",
+		"--loglevel",
+		dest="log_level"
+	)
+	p.add_argument(
+		"-p",
+		"--platform",
+		dest="platform"
+	)
+	p.add_argument(
+		"-y",
+		"--clear-cache",
+		dest="clear_cache",
+		action="store_true"
+	)
+
 	args = p.parse_args()
 
-	# sort out the log level (there is probably a better way to do this?)
+	# sort out the log level
 	if args.log_level == None:
 		args.log_level = "info"
 	if args.log_level not in log_levels:
-		logging.error( "Unknown log level: %s" % args.log_level )
+		logging.error("Unknown log level: %s" % args.log_level)
 
 	# initialize logging
-	logging.basicConfig( level=log_levels[ args.log_level ] )
+	logging.basicConfig(level=log_levels[args.log_level])
 
 	# load config
-	config = load_config( args.config_path )
+	config = load_config(args.config_path)
 
 	if not args.platform:
 		args.platform = get_platform()
-		logging.info( "Platform defaulting to: %s" % args.platform )
+		logging.info("Platform defaulting to: %s" % args.platform)
 
 	# attempt to load the tools via the tool path
-	if config.tools and (type(config.tools) == str or type(config.tools) == unicode):
+	if config.tools and type_is_string(config.tools):
 		base_path = os.path.dirname(args.config_path)
 		#logging.info( "base_path = %s" % base_path )
 		#logging.info( "config.tools = %s" % config.tools )
-		abs_tools_path = os.path.abspath( os.path.join(base_path,config.tools) )
-		logging.info( "Importing tools from %s..." % abs_tools_path )
-		config.tools = load_config( abs_tools_path )
+		abs_tools_path = os.path.abspath(
+			os.path.join(base_path, config.tools)
+		)
+		logging.info("Importing tools from %s..." % abs_tools_path)
+		config.tools = load_config(abs_tools_path)
 
 	# load cache
-	cache_path = os.path.splitext( args.config_path )[0] + ".cache"
+	cache_path = os.path.splitext(args.config_path)[0] + ".cache"
 
-	if args.clear_cache and os.path.exists( cache_path ):
-		logging.info( "clearing cache at %s" % cache_path )
-		os.unlink( cache_path )
+	if args.clear_cache and os.path.exists(cache_path):
+		logging.info("clearing cache at %s" % cache_path)
+		os.unlink(cache_path)
 	
-	if os.path.exists( cache_path ):
-		logging.info( "Reading cache from %s..." % cache_path )
-		file = open( cache_path, "rb" )
-		cache = json.load( file )
+	if os.path.exists(cache_path):
+		logging.info("Reading cache from %s..." % cache_path)
+		file = open(cache_path, "rb")
+		cache = json.load(file)
 		file.close()
 	elif not args.clear_cache:
-		logging.warn( "No cache at %s" % cache_path )
+		logging.warn("No cache at %s" % cache_path)
 
 	# conform all paths
 	if getattr(config, "paths", None):
-		base_path = os.path.dirname( os.path.abspath(args.config_path) )
+		base_path = os.path.dirname(os.path.abspath(args.config_path))
 
 		for key in config.paths:
-			if type(config.paths[key]) is unicode or type(config.paths[key]) is str:
-				value = clean_path( config.paths[key] )
-				value = os.path.abspath( os.path.join(base_path,value) )
+			if type_is_string(config.paths[key]):
+				value = clean_path(config.paths[key])
+				value = os.path.abspath(os.path.join(base_path, value))
 			elif type(config.paths[key]) is list:
 				path_list = config.paths[key]
 				for path in path_list:
-					path = clean_path( path )
-					path = os.path.abspath( os.path.join(base_path,path) )
+					path = clean_path(path)
+					path = os.path.abspath(os.path.join(base_path,path))
 				value = path_list
 			else:
-				raise Exception("Unknown path type! key: %s -> %s" % (key, type(config.paths[key])) )
+				raise Exception(
+					"Unknown path type! key: %s -> %s" %
+					(key, type(config.paths[key]))
+				)
 			
-			config.paths[ key ] = value
-			#logging.info( "* %s -> %s" % (key, value) )
+			config.paths[key] = value
 
-		setattr(settings, "paths", AttributeStore( config.paths ) )
+		setattr(settings, "paths", AttributeStore(config.paths))
 
 	# setup environment variables, path, etc.
-	setup_environment( config.paths )
+	setup_environment(config.paths)
 	
 	# parse all tools
 	if type(config.tools) == dict:
 		for name in config.tools:
-			tool = Tool( name=name, data=config.tools[name] )
-			tools[ name ] = tool
+			tool = Tool(name=name, data=config.tools[name])
+			tools[name] = tool
 	else:
 		for name, data in config.tools:
-			tool = Tool( name=name, data=data )
-			tools[ name ] = tool
-	logging.info( "Loaded %i tools." % len(tools.items()) )
+			tool = Tool(name=name, data=data)
+			tools[name] = tool
+	logging.info("Loaded %i tools." % len(tools.items()))
 
 	# add internal tools
-	tools[ "copy" ] = CopyCommand(name="copy", data={})
+	tools["copy"] = CopyCommand(name="copy", data={})
 
 	# parse asset folders
 	for asset_glob in config.assets:
-		data = dict({u"glob" : asset_glob}.items() + config.assets[asset_glob].items())
-		asset_folder = AssetFolder( **data )
-		asset_folder.make_folders_absolute( settings.paths.source_assets, settings.paths.compiled_assets )
-		asset_folders.append( asset_folder )
-	logging.info( "Loaded %i asset folders." % len(asset_folders) )
+		data = dict(
+			{u"glob" : asset_glob}.items() +
+			config.assets[asset_glob].items()
+		)
+		asset_folder = AssetFolder(**data)
+		asset_folder.make_folders_absolute(
+			settings.paths.source_assets, 
+			settings.paths.compiled_assets
+		)
+		asset_folders.append(asset_folder)
+	logging.info("Loaded %i asset folders." % len(asset_folders))
 
 	# loop through each asset path and glob
 	# run the tool associated with each file
-	logging.info( "Running tools on assets..." )
+	logging.info("Running tools on assets...")
 	total_files = 0
 	modified_files = 0
 	for asset in asset_folders:

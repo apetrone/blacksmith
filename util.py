@@ -38,3 +38,6 @@ def run_as_shell():
 	if get_platform() == "windows":
 		is_shell = True
 	return is_shell
+
+def type_is_string(value):
+	return type(value) is str or type(value) is unicode

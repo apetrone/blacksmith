@@ -84,7 +84,7 @@ class Tool(object):
 		if self.platforms and params["platform"] in self.platforms:
 			params["tool"] = self.platforms[params["platform"]]
 		else:
-			# no platforms specified for this tool, so we default to the tool name
+			# no platforms specified for this tool; default to the tool name
 			params["tool"] = self.name
 
 		for raw_cmd in self.commands:
@@ -105,7 +105,10 @@ class Tool(object):
 class CopyCommand(Tool):
 	def execute(self, params):
 		try:
-			#logging.debug( "[COPY] %s -> %s" % (params["src_file_path"], params["dst_file_path"]) )
+			# logging.debug(
+			# 	"[COPY] %s -> %s" %
+			# 	(params["src_file_path"], params["dst_file_path"])
+			# )
 			shutil.copyfile(params["src_file_path"], params["dst_file_path"])
 		except IOError as exc:
 			logging.info("IOError: %s" % exc)
