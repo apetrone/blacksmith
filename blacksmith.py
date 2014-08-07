@@ -12,6 +12,12 @@ import time
 #from watchdog.events import FileSystemEventHandler
 #from watchdog.observers import Observer
 
+from models import (
+	AttributeStore,
+	Tool,
+	AssetFolder
+)
+
 included_configs = []
 
 def make_dirs(target_path, chmod=0775):
@@ -33,18 +39,16 @@ def make_dirs(target_path, chmod=0775):
 	except:
 		raise
 
-def strip_trailing_slash( path ):
+def strip_trailing_slash(path):
 	if path[-1] == '/' or path[-1] == '\\':
 		path = path[:-1]
 	return path
 
-def clean_path( path ):
-	return strip_trailing_slash( path )
-	#return os.path.normpath( os.path.abspath(path) )
+def clean_path(path):
+	return strip_trailing_slash(path)
 
 def get_platform():
 	p = platform.platform().lower()
-	#print( "Platform: " + p )
 	if 'linux' in p:
 		return "linux"
 	elif "darwin" in p:
@@ -60,118 +64,41 @@ def run_as_shell():
 		is_shell = True
 	return is_shell
 
-
 def load_config(path):
 	config = None
 	path = os.path.abspath(path)
-	if os.path.exists( path ) and (path not in included_configs):
+	if os.path.exists(path) and (path not in included_configs):
 		included_configs.append(path)
 
 		with open(path, "rb") as file:
-			cfg = json.load( file )
+			cfg = json.load(file)
 		
-		config = AttributeStore( cfg )
+		config = AttributeStore(cfg)
 
 		if getattr(config, "include", None):
 			# assume an include is relative
 			base_path = os.path.dirname(path)
-			config_path = os.path.abspath( os.path.join(base_path,config.include) )
+			config_path = os.path.abspath(os.path.join(base_path,config.include))
 			newconfig = load_config(config_path)
 
 			if newconfig:
 				newconfig.merge(config)
 				return newconfig
-
 	else:
-		logging.error( "load_config: config '%s' does not exist or was already included." % path )
+		logging.error("load_config: config '%s' does not exist or was already included." % path)
 
 	return config
 
-def setupEnvironment( paths ):
+def setup_environment(paths):
 	# add asset_path to PATH environment var
 	if type(paths['tool_path']) is unicode:
-		paths['tool_path'] = [ paths['tool_path'] ]
+		paths['tool_path'] = [paths['tool_path']]
 
-	tool_paths = ':'.join( paths['tool_path'] )
+	tool_paths = ':'.join(paths['tool_path'])
 
 	os.environ['PATH'] = os.environ['PATH'] + ':' + tool_paths
 
-class AttributeStore(object):
-	def __init__(self, *initial_data, **kwargs):
-		for dictionary in initial_data:
-			for key in dictionary:
-				setattr(self, key, dictionary[key])
-		for key in kwargs:
-			setattr(self, key, kwargs[key])
 
-	def __iter__(self):
-		for i in self.__dict__.items():
-			yield i
-
-	def merge(self, other):
-		for key, value in other.__dict__.iteritems():
-			attrib = getattr(self, key, None)
-			if attrib:
-				if type(value) == list and type(attrib) == list:
-					attrib.extend(value)
-				elif type(value) == dict and type(attrib) == dict:
-					attrib.update(value)
-				elif type(attrib) == unicode or type(attrib) == str:
-					attrib = value
-				else:
-					raise Exception( "Unknown conflict types '%s' <-> '%s'!" % (type(attrib), type(value)) )
-			else:
-				self.__dict__[key] = value
-class Tool(object):
-	def __init__(self, *args, **kwargs):
-		self.name = kwargs.get( 'name', None )
-		
-		data = kwargs.get( 'data', None )
-		if data is None:
-			logging.warn( "Tool data missing! Unable to parse tool." )
-			raise Exception( "Missing tool data" )
-
-		self.platforms = data.get( 'platforms', None )
-		self.commands = data.get( 'commands', [] )
-
-	def __str__(self):
-		return 'Tool [Name=%s, Commands=%i]' % (self.name, len(self.commands))
-
-	def execute( self, params ):
-		if self.platforms and params['platform'] in self.platforms:
-			params['tool'] = self.platforms[ params['platform'] ]
-		else:
-			# no platforms specified for this tool, so we default to the tool name
-			params['tool'] = self.name
-
-		for raw_cmd in self.commands:
-			try:
-				cmd = (raw_cmd % params).encode('ascii')
-			except TypeError as e:
-				logging.error( raw_cmd )
-				logging.error( params )
-
-			#logging.info( cmd )
-			runnable = shlex.split( cmd )
-
-			try:			
-				returncode = subprocess.call( runnable, shell=run_as_shell() )
-				if returncode != 0:
-					logging.error( "ERROR %s" % cmd )
-			except OSError as e:
-				logging.error( "ERROR executing '%s', %s" % (cmd, e) )
-
-class AssetFolder(object):
-	def __init__(self, *args, **kwargs):
-		self.glob = kwargs.get( 'glob', None )
-		self.src_folder, self.glob = self.glob.split('/')
-		self.dst_folder = kwargs.get( 'destination', self.src_folder )
-		self.tool = kwargs.get( 'tool', None )
-		self.params = kwargs.get( 'params', {} )
-
-	def makeFoldersAbsolute( self, asset_source_path, asset_destination_path ):
-		self.abs_src_folder = os.path.join( asset_source_path, self.src_folder )
-		self.abs_dst_folder = os.path.join( asset_destination_path, self.dst_folder )
 
 class UnknownToolException(Exception):
 	pass
@@ -322,7 +249,7 @@ def main():
 		setattr(settings, 'paths', AttributeStore( config.paths ) )
 
 	# setup environment variables, path, etc.
-	setupEnvironment( config.paths )
+	setup_environment( config.paths )
 	
 	# parse all tools
 	if type(config.tools) == dict:
