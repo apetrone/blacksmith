@@ -7,8 +7,8 @@ import logging
 import re
 import time
 
-#from watchdog.events import FileSystemEventHandler
-#from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from models import (
 	AssetFolder,
@@ -19,26 +19,21 @@ from models import (
 )
 
 from util import(
+	clean_path,
+	generate_params_for_file,
 	get_platform,
 	make_dirs,
 	run_as_shell,
+	setup_environment,
+	source_file_cache_status,
+	strip_trailing_slash,
 	type_is_string
 )
 
 included_configs = []
-
-
-def strip_trailing_slash(path):
-	if path[-1] == "/" or path[-1] == "\\":
-		path = path[:-1]
-	return path
-
-def clean_path(path):
-	return strip_trailing_slash(path)
-
-
-
 def load_config(path):
+	global included_configs
+
 	config = None
 	path = os.path.abspath(path)
 	if os.path.exists(path) and (path not in included_configs):
@@ -68,77 +63,6 @@ def load_config(path):
 
 	return config
 
-def setup_environment(paths):
-	# add asset_path to PATH environment var
-	if type(paths["tool_path"]) is unicode:
-		paths["tool_path"] = [paths["tool_path"]]
-
-	tool_paths = ":".join(paths["tool_path"])
-
-	os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
-
-
-def generate_params_for_file(
-		paths, 
-		asset, 
-		src_file_path,
-		platform_name
-	):
-	# base parameters are from the asset block
-	params = asset.params
-
-	basename = os.path.basename(src_file_path)
-
-	# default parameters
-	params["src_file_path"] = src_file_path
-	params["src_file_basename"] = basename
-	params["src_file_ext"] = \
-		os.path.basename(src_file_path).split(".")[1]
-
-	params["dst_file_path"] = os.path.join(
-		paths.compiled_assets,
-		asset.dst_folder,
-		basename
-	)
-	params["dst_file_noext"] = os.path.join(
-		paths.compiled_assets,
-		asset.dst_folder,
-		basename.split(".")[0]
-	)
-	
-
-	params["abs_src_folder"] = asset.abs_src_folder
-	params["abs_dst_folder"] = asset.abs_dst_folder
-
-	params["platform"] = platform_name
-
-	# setup commands - this needs to be moved to an external .conf
-	cmd_move = ""
-	if get_platform() == "windows":
-		cmd_move = "move"
-		cmd_copy = "copy"
-	else:
-		cmd_move = "mv"
-		cmd_copy = "cp"
-
-	params["cmd_move"] = cmd_move
-	params["cmd_copy"] = cmd_copy
-
-	return params
-
-
-# if the file is not in the cache, return 0
-# if the file is IN the cache and modified, return 1
-# if the file is IN the cache, but not modified, return 2
-def source_file_cache_status(path, cache):
-	if path in cache:
-		cached_modified = cache[path]
-		modified = os.path.getmtime(path)
-		if modified <= cached_modified:
-			return 2
-		else:
-			return 1
-	return 0
 
 def update_cache(path, cache):
 	cache[path] = os.path.getmtime(path)
