@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import shutil
 import shlex
@@ -65,6 +66,89 @@ class AttributeStore(object):
 			else:
 				self.__dict__[key] = value
 
+class Cache(object):
+	CACHE_EXTENSION = "cache"
+
+	CACHE_ADDED = 0
+	CACHE_UPDATED = 1
+	CACHE_IS_NEWER = 2
+
+
+	ALTER_TABLE = {
+		CACHE_ADDED: "A", # added
+		CACHE_UPDATED: "M", # modified
+		CACHE_IS_NEWER: "O"  # ignored
+	}	
+
+	def __init__(self, relative_config_path, remove=False):
+		# derive the cache path from the relative relative_config path
+		relative_cache_path = os.path.splitext(
+			relative_config_path
+		)[0] + ".%s" % Cache.CACHE_EXTENSION
+	
+		# init variables
+		self.abs_cache_path = os.path.abspath(relative_cache_path)
+		self.cache = {}
+
+		# remove if requested
+		if remove:
+			self.remove()
+
+	def load(self):
+		if os.path.exists(self.abs_cache_path):
+			logging.info("Reading cache from %s..." % self.abs_cache_path)
+			with open(self.abs_cache_path, "rb") as file:
+				self.cache = json.load(file)
+				file.close()
+
+	def save(self):
+		logging.info("Writing cache %s..." % self.abs_cache_path)
+		with open(self.abs_cache_path, "wb") as file:
+			file.write(json.dumps(self.cache, indent=4))
+
+	def update(self, abs_asset_path):
+		"""
+			Update the cache with the modified file time for
+			the file at abs_asset_path.
+
+			Return true if the abs_asset_path modtime is > the
+			cached modtime.
+
+			Otherwise, return False
+		"""
+
+		# get the new modified time
+		modtime = os.path.getmtime(abs_asset_path)
+
+		# keep track of status
+		status = Cache.CACHE_ADDED
+
+		# compare that value to the cached value
+		# update if necessary
+		# 
+		if abs_asset_path in self.cache:
+			if modtime <= self.cache[abs_asset_path]:
+				status = Cache.CACHE_IS_NEWER
+				return False
+			else:
+				status = Cache.CACHE_UPDATED
+		else:
+			status = Cache.CACHE_ADDED
+
+		logging.info(
+			"%c -> %s" %
+		 	(Cache.ALTER_TABLE[status], abs_asset_path)
+		)
+
+		self.cache[abs_asset_path] = modtime
+		if status == Cache.CACHE_IS_NEWER:
+			return False
+
+		return True
+
+	def remove(self):
+		if os.path.exists(self.abs_cache_path):
+			os.unlink(self.abs_cache_path)
 
 class Tool(object):
 	def __init__(self, *args, **kwargs):

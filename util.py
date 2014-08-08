@@ -6,11 +6,6 @@ import platform
 def clean_path(path):
 	return strip_trailing_slash(path)
 
-def clear_cache(cache_path):
- if os.path.exists(cache_path):
-		logging.info("clearing cache at %s" % cache_path)
-		os.unlink(cache_path)
-
 def generate_params_for_file(
 		paths, 
 		asset, 
@@ -71,16 +66,6 @@ def get_platform():
 		return "unknown"
 
 
-def load_cache(cache_path):
-	if os.path.exists(cache_path):
-		logging.info("Reading cache from %s..." % cache_path)
-		with open(cache_path, "rb") as file:
-			cache = json.load(file)
-			file.close()
-		return cache
-
-	return {}
-
 def load_tools(config_path, tools):
 	""" load tools and treat tools as a path if it happens to be a string.
 		Otherwise, return it, because it's not what we're expecting.
@@ -129,19 +114,6 @@ def setup_environment(paths):
 
 	tool_paths = ":".join(paths["tool_path"])
 	os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
-
-# if the file is not in the cache, return 0
-# if the file is IN the cache and modified, return 1
-# if the file is IN the cache, but not modified, return 2
-def source_file_cache_status(path, cache):
-	if path in cache:
-		cached_modified = cache[path]
-		modified = os.path.getmtime(path)
-		if modified <= cached_modified:
-			return 2
-		else:
-			return 1
-	return 0
 
 def strip_trailing_slash(path):
 	if path[-1] == "/" or path[-1] == "\\":

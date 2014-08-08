@@ -15,6 +15,7 @@ import time
 from models import (
 	AssetFolder,
 	AttributeStore,
+	Cache,
 	CopyCommand,
 	Tool,
 	UnknownToolException
@@ -22,15 +23,12 @@ from models import (
 
 from util import(
 	clean_path,
-	clear_cache,
 	generate_params_for_file,
 	get_platform,
-	load_cache,
 	load_tools,
 	make_dirs,
 	run_as_shell,
 	setup_environment,
-	source_file_cache_status,
 	strip_trailing_slash,
 	type_is_string
 )
@@ -102,9 +100,6 @@ def load_config(path):
 	return config
 
 
-def update_cache(path, cache):
-	cache[path] = os.path.getmtime(path)
-
 def main():
 	commands = {}
 	config = None
@@ -112,7 +107,7 @@ def main():
 	settings = AttributeStore()
 	tools = {}
 	asset_folders = []
-	alter_code = {0: "A", 1:"M", 2:"O"}
+
 	log_levels = {
 		"debug" : logging.DEBUG,
 		"info" : logging.INFO,
@@ -176,13 +171,8 @@ def main():
 	config.tools = load_tools(args.config_path, getattr(config, "tools", None))
 
 	# get cache path
-	cache_path = os.path.splitext(args.config_path)[0] + ".cache"
-
-	if args.clear_cache:
-		clear_cache(cache_path)
-	
-	# load cache
-	cache = load_cache(cache_path)
+	cache = Cache(args.config_path, remove=args.clear_cache)	
+	cache.load()
 
 	# conform all paths
 	if getattr(config, "paths", None):
@@ -252,8 +242,8 @@ def main():
 			)
 			logging.debug("Processing: \"%s\"" % search_path)
 			
-			if tools.has_key( asset.tool ):
-				tool = tools[ asset.tool ]
+			if tools.has_key(asset.tool):
+				tool = tools[asset.tool]
 			else:
 				raise UnknownToolException(
 					"Unknown tool \"%s\"" % asset.tool
@@ -269,21 +259,11 @@ def main():
 
 				total_files += 1
 
-				cache_status = source_file_cache_status(
-					src_file_path,
-					cache
-				)
-				if cache_status == 2:
+				# try to update the cache
+				if not cache.update(src_file_path):
 					continue
 
-				logging.info(
-					"%c -> %s" %
-				 	(alter_code[cache_status], src_file_path)
-				)
 				modified_files += 1
-
-				# make sure we update the file cache
-				update_cache(src_file_path, cache)
 
 				params = generate_params_for_file(
 					settings.paths, 
@@ -298,10 +278,7 @@ def main():
 			continue
 
 	# write cache to file
-	logging.info("Writing cache %s..." % cache_path)
-	file = open(cache_path, "wb")
-	file.write(json.dumps(cache, indent=4))
-	file.close()
+	cache.save()
 
 	logging.info("Complete.")
 	logging.info("Modified / Total - %i/%i" % (modified_files, total_files))
