@@ -8,7 +8,7 @@ import re
 import time
 
 from models import (
-	AssetFolder,
+	AssetFolderMask,
 	AttributeStore,
 	Cache,
 	CopyCommand,
@@ -85,13 +85,62 @@ def monitor_assets(
 			are interested in.
 		"""
 
-		def show_event(self, event):
-			logging.info("event_type: %s" % event.event_type)
-			logging.info("is_directory: %s" % event.is_directory)
-			logging.info("src_path: %s" % event.src_path)
+		def __init__(
+				self,
+				cache,
+				settings,
+				asset_folders,
+				tools,
+				platform
+			):
+			self.cache = cache
+			self.settings = settings
+			self.asset_folders = asset_folders
+			self.tools = tools
+			self.platform = platform
 
+		def show_event(self, event):
+			# logging.info("event_type: %s" % event.event_type)
+			# logging.info("is_directory: %s" % event.is_directory)
+			# 
+			# logging.info("src_path: %s" % event.src_path)
+
+
+			# if hasattr(event, "dest_path"):
+				# logging.info("dest_path: %s" % event.dest_path)
+
+			target_path = event.src_path
 			if hasattr(event, "dest_path"):
-				logging.info("dest_path: %s" % event.dest_path)
+				target_path = event.dest_path
+
+			# logging.info("target_path: %s" % target_path)
+
+			for asset in asset_folders:
+				match = re.search(asset.get_abs_regex(), target_path)
+				if match:
+					# logging.info("-> %s" % asset.get_abs_regex())
+					# logging.info(asset.glob)
+
+					# try to update the cache
+					if not self.cache.update(target_path):
+						break
+
+
+					if self.tools.has_key(asset.tool):
+						tool = tools[asset.tool]
+					else:
+						raise UnknownToolException(
+							"Unknown tool \"%s\"" % asset.tool
+						)
+
+					params = generate_params_for_file(
+						self.settings.paths, 
+						asset,
+						target_path,
+						self.platform
+					)
+					tool.execute(params)
+					break
 
 		def on_created(self, event):
 			self.show_event(event)
@@ -105,9 +154,18 @@ def monitor_assets(
 		def on_moved(self, event):
 			self.show_event(event)
 
-	event_handler = Apprentice()
+	logging.info("Monitoring assets in: %s..." % settings.paths.source_assets)
+
+	event_handler = Apprentice(
+		cache,
+		settings,
+		asset_folders,
+		tools,
+		platform
+	)
+
 	observer = Observer()
-	observer.schedule(event_handler, "/Users/apetrone/Documents/gemini/assets", recursive=True)
+	observer.schedule(event_handler, settings.paths.source_assets, recursive=True)
 	observer.start()
 
 	import time
@@ -118,7 +176,7 @@ def monitor_assets(
 	except KeyboardInterrupt:
 		observer.stop()
 
-	observer.join()	
+	observer.join()
 
 
 def iterate_assets(
@@ -266,7 +324,7 @@ def main():
 			{u"glob" : asset_glob}.items() +
 			config.assets[asset_glob].items()
 		)
-		asset_folder = AssetFolder(**data)
+		asset_folder = AssetFolderMask(**data)
 		asset_folder.make_folders_absolute(
 			settings.paths.source_assets, 
 			settings.paths.compiled_assets

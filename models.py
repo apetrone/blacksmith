@@ -1,4 +1,5 @@
 import os
+import fnmatch
 import json
 import logging
 import shutil
@@ -20,13 +21,14 @@ class UnknownToolException(Exception):
 #
 # Classes
 #
-class AssetFolder(object):
+class AssetFolderMask(object):
 	def __init__(self, *args, **kwargs):
 		self.glob = kwargs.get("glob", None)
 		self.src_folder, self.glob = self.glob.split("/")
 		self.dst_folder = kwargs.get("destination", self.src_folder)
 		self.tool = kwargs.get("tool", None)
 		self.params = kwargs.get("params", {})
+		self.abs_regex = None
 
 	def make_folders_absolute(self, asset_source_path, asset_destination_path):
 		self.abs_src_folder = os.path.join(
@@ -35,6 +37,13 @@ class AssetFolder(object):
 		self.abs_dst_folder = os.path.join(
 			asset_destination_path, self.dst_folder
 		)
+
+	def get_abs_regex(self):
+		if not self.abs_regex:
+			self.abs_regex = fnmatch.translate(
+				os.path.join(self.abs_src_folder, self.glob)
+			)
+		return self.abs_regex
 
 class AttributeStore(object):
 	def __init__(self, *initial_data, **kwargs):
