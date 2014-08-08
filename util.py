@@ -101,6 +101,30 @@ def make_dirs(target_path, chmod=0775):
 	except:
 		raise
 
+def normalize_paths(base_path, path_list):
+	paths = {}
+
+	for key in path_list:
+		if type_is_string(path_list[key]):
+			value = clean_path(path_list[key])
+			value = os.path.abspath(os.path.join(base_path, value))
+		elif type(path_list[key]) is list:
+			items = path_list[key]
+			for path in items:
+				path = clean_path(path)
+				path = os.path.abspath(os.path.join(base_path,path))
+			value = items
+		else:
+			raise Exception(
+				"Unknown path type! key: %s -> %s" %
+				(key, type(path_list[key]))
+			)
+		
+		paths[key] = value
+
+	return paths
+
+
 def run_as_shell():
 	is_shell = False
 	if get_platform() == "windows":

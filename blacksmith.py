@@ -11,7 +11,6 @@ import time
 #from watchdog.events import FileSystemEventHandler, LoggingEventHandler
 #from watchdog.observers import Observer
 
-
 from models import (
 	AssetFolder,
 	AttributeStore,
@@ -22,11 +21,11 @@ from models import (
 )
 
 from util import(
-	clean_path,
 	generate_params_for_file,
 	get_platform,
 	load_tools,
 	make_dirs,
+	normalize_paths,
 	run_as_shell,
 	setup_environment,
 	strip_trailing_slash,
@@ -107,13 +106,6 @@ def main():
 	settings = AttributeStore()
 	tools = {}
 	asset_folders = []
-
-	log_levels = {
-		"debug" : logging.DEBUG,
-		"info" : logging.INFO,
-		"warn" : logging.WARN,
-		"error" : logging.ERROR
-	}
 	
 	p = argparse.ArgumentParser()
 	p.add_argument(
@@ -124,11 +116,7 @@ def main():
 		help="Configuration file path to use when converting assets",
 		required=True
 	)
-	p.add_argument(
-		"-l",
-		"--loglevel",
-		dest="log_level"
-	)
+
 	p.add_argument(
 		"-p",
 		"--platform",
@@ -151,14 +139,8 @@ def main():
 
 	args = p.parse_args()
 
-	# sort out the log level
-	if args.log_level == None:
-		args.log_level = "info"
-	if args.log_level not in log_levels:
-		logging.error("Unknown log level: %s" % args.log_level)
-
 	# initialize logging
-	logging.basicConfig(level=log_levels[args.log_level])
+	logging.basicConfig(level=logging.INFO)
 
 	# load config
 	config = load_config(args.config_path)
@@ -177,25 +159,7 @@ def main():
 	# conform all paths
 	if getattr(config, "paths", None):
 		base_path = os.path.dirname(os.path.abspath(args.config_path))
-
-		for key in config.paths:
-			if type_is_string(config.paths[key]):
-				value = clean_path(config.paths[key])
-				value = os.path.abspath(os.path.join(base_path, value))
-			elif type(config.paths[key]) is list:
-				path_list = config.paths[key]
-				for path in path_list:
-					path = clean_path(path)
-					path = os.path.abspath(os.path.join(base_path,path))
-				value = path_list
-			else:
-				raise Exception(
-					"Unknown path type! key: %s -> %s" %
-					(key, type(config.paths[key]))
-				)
-			
-			config.paths[key] = value
-
+		config.paths = normalize_paths(base_path, config.paths)
 		setattr(settings, "paths", AttributeStore(config.paths))
 
 	# setup environment variables, path, etc.
