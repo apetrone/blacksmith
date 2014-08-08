@@ -11,12 +11,14 @@ from models import (
 	AssetFolderMask,
 	AttributeStore,
 	Cache,
-	CopyCommand,
+	CopyTool,
+	MoveTool,
 	Tool,
 	UnknownToolException
 )
 
 from util import(
+	execute_commands,
 	generate_params_for_file,
 	get_platform,
 	load_tools,
@@ -139,7 +141,9 @@ def monitor_assets(
 						target_path,
 						self.platform
 					)
-					tool.execute(params)
+
+					execute_commands(self.tools, tool, params)
+					#tool.execute(params)
 					break
 
 		def on_created(self, event):
@@ -316,7 +320,9 @@ def main():
 	logging.info("Loaded %i tools." % len(tools.items()))
 
 	# add internal tools
-	tools["copy"] = CopyCommand(name="copy", data={})
+	for klass in Tool.__subclasses__():
+		instance = klass()
+		tools[instance.name] = instance
 
 	# parse asset folders
 	for asset_glob in config.assets:

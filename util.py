@@ -40,19 +40,27 @@ def generate_params_for_file(
 
 	params["platform"] = platform_name
 
-	# setup commands - this needs to be moved to an external .conf
-	cmd_move = ""
-	if get_platform() == "windows":
-		cmd_move = "move"
-		cmd_copy = "copy"
-	else:
-		cmd_move = "mv"
-		cmd_copy = "cp"
-
-	params["cmd_move"] = cmd_move
-	params["cmd_copy"] = cmd_copy
-
 	return params
+
+def execute_commands(tools, current_tool, params):
+	lines = []
+
+	for raw_command in current_tool.commands:
+		try:
+			cmd = (raw_command % params).encode("ascii")
+			lines.append(cmd)
+		except TypeError as exc:
+			logging.error(raw_cmd)
+			logging.error(params)			
+
+		logging.info(cmd)
+		runnable = shlex.split(cmd)
+		try:
+			returncode = subprocess.call(runnable, shell=run_as_shell())
+			if returncode != 0:
+				logging.error("ERROR %s" % cmd)
+		except OSError as exc:
+			logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
 
 def get_platform():
 	p = platform.platform().lower()

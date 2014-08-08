@@ -196,7 +196,10 @@ class Tool(object):
 			except OSError as exc:
 				logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
 
-class CopyCommand(Tool):
+class CopyTool(Tool):
+	def __init__(self):
+		super(CopyTool, self).__init__(name="copy", data={})
+
 	def execute(self, params):
 		try:
 			# logging.debug(
@@ -206,3 +209,13 @@ class CopyCommand(Tool):
 			shutil.copyfile(params["src_file_path"], params["dst_file_path"])
 		except IOError as exc:
 			logging.info("IOError: %s" % exc)
+
+class MoveTool(Tool):
+	def __init__(self):
+		super(MoveTool, self).__init__(name="move", data={})
+
+	def execute(self, params):
+		try:
+			shutil.move(params["src_file_path"], params["dst_file_path"])
+		except:
+			raise
