@@ -7,10 +7,6 @@ import logging
 import re
 import time
 
-#import watchdog
-#from watchdog.events import FileSystemEventHandler, LoggingEventHandler
-#from watchdog.observers import Observer
-
 from models import (
 	AssetFolder,
 	AttributeStore,
@@ -31,37 +27,6 @@ from util import(
 	strip_trailing_slash,
 	type_is_string
 )
-
-
-
-# class Apprentice(watchdog.events.FileSystemEventHandler):
-# 	"""
-# 		The apprentice will help us out by monitoring the paths we
-# 		are interested in.
-# 	"""
-
-# 	def show_event(self, event):
-# 		logging.info("event_type: %s" % event.event_type)
-# 		logging.info("is_directory: %s" % event.is_directory)
-# 		logging.info("src_path: %s" % event.src_path)
-
-# 		if hasattr(event, "dest_path"):
-# 			logging.info("dest_path: %s" % event.dest_path)
-
-# 	def on_created(self, event):
-# 		self.show_event(event)
-
-# 	def on_deleted(self, event):
-# 		self.show_event(event)
-
-# 	def on_modified(self, event):
-# 		self.show_event(event)
-
-# 	def on_moved(self, event):
-# 		self.show_event(event)
-
-
-
 
 
 
@@ -98,6 +63,122 @@ def load_config(path):
 
 	return config
 
+def monitor_assets(
+		cache, 
+		settings, 
+		asset_folders,
+		tools, 
+		platform
+	):
+
+	try:
+		import watchdog
+		from watchdog.events import FileSystemEventHandler, LoggingEventHandler
+		from watchdog.observers import Observer
+	except:
+		logging.error("Unable to import watchdog. It is required for monitoring!")
+		raise
+
+	class Apprentice(watchdog.events.FileSystemEventHandler):
+		"""
+			The apprentice will help us out by monitoring the paths we
+			are interested in.
+		"""
+
+		def show_event(self, event):
+			logging.info("event_type: %s" % event.event_type)
+			logging.info("is_directory: %s" % event.is_directory)
+			logging.info("src_path: %s" % event.src_path)
+
+			if hasattr(event, "dest_path"):
+				logging.info("dest_path: %s" % event.dest_path)
+
+		def on_created(self, event):
+			self.show_event(event)
+
+		def on_deleted(self, event):
+			self.show_event(event)
+
+		def on_modified(self, event):
+			self.show_event(event)
+
+		def on_moved(self, event):
+			self.show_event(event)
+
+	event_handler = Apprentice()
+	observer = Observer()
+	observer.schedule(event_handler, "/Users/apetrone/Documents/gemini/assets", recursive=True)
+	observer.start()
+
+	import time
+	import sys
+	try:
+		while True:
+			time.sleep(1)
+	except KeyboardInterrupt:
+		observer.stop()
+
+	observer.join()	
+
+
+def iterate_assets(
+		cache, 
+		settings, 
+		asset_folders,
+		tools, 
+		platform
+	):
+	# loop through each asset path and glob
+	# run the tool associated with each file
+	logging.info("Running tools on assets...")
+	total_files = 0
+	modified_files = 0
+	for asset in asset_folders:
+		try:
+			search_path = os.path.join(
+				asset.abs_src_folder, 
+				asset.glob
+			)
+			logging.debug("Processing: \"%s\"" % search_path)
+			
+			if tools.has_key(asset.tool):
+				tool = tools[asset.tool]
+			else:
+				raise UnknownToolException(
+					"Unknown tool \"%s\"" % asset.tool
+				)
+
+			path_created = False
+
+			for src_file_path in iglob(search_path):
+				if not path_created:
+					path_created = True
+					# make all asset destination folders
+					make_dirs(asset.abs_dst_folder)
+
+				total_files += 1
+
+				# try to update the cache
+				if not cache.update(src_file_path):
+					continue
+
+				modified_files += 1
+
+				params = generate_params_for_file(
+					settings.paths, 
+					asset,
+					src_file_path,
+					platform
+				)
+				tool.execute(params)
+
+		except UnknownToolException as e:
+			logging.warn(e.message)
+			continue	
+
+
+	logging.info("Complete.")
+	logging.info("Modified / Total - %i/%i" % (modified_files, total_files))
 
 def main():
 	commands = {}
@@ -193,81 +274,27 @@ def main():
 		asset_folders.append(asset_folder)
 	logging.info("Loaded %i asset folders." % len(asset_folders))
 
-	# loop through each asset path and glob
-	# run the tool associated with each file
-	logging.info("Running tools on assets...")
-	total_files = 0
-	modified_files = 0
-	for asset in asset_folders:
-		try:
-			search_path = os.path.join(
-				asset.abs_src_folder, 
-				asset.glob
-			)
-			logging.debug("Processing: \"%s\"" % search_path)
-			
-			if tools.has_key(asset.tool):
-				tool = tools[asset.tool]
-			else:
-				raise UnknownToolException(
-					"Unknown tool \"%s\"" % asset.tool
-				)
-
-			path_created = False
-
-			for src_file_path in iglob(search_path):
-				if not path_created:
-					path_created = True
-					# make all asset destination folders
-					make_dirs(asset.abs_dst_folder)
-
-				total_files += 1
-
-				# try to update the cache
-				if not cache.update(src_file_path):
-					continue
-
-				modified_files += 1
-
-				params = generate_params_for_file(
-					settings.paths, 
-					asset,
-					src_file_path,
-					args.platform
-				)
-				tool.execute(params)
-
-		except UnknownToolException as e:
-			logging.warn(e.message)
-			continue
+	if args.monitor:
+		# run monitoring
+		monitor_assets(
+			cache,
+			settings,
+			asset_folders,
+			tools,
+			args.platform
+		)
+	else:
+		# just run through all assets
+		iterate_assets(
+			cache,
+			settings,
+			asset_folders,
+			tools, 
+			args.platform
+		)
 
 	# write cache to file
 	cache.save()
 
-	logging.info("Complete.")
-	logging.info("Modified / Total - %i/%i" % (modified_files, total_files))
-
-
-# def monitor_test():
-# 	logging.basicConfig(level=logging.INFO)
-	
-
-# 	event_handler = Apprentice()
-# 	observer = Observer()
-# 	observer.schedule(event_handler, "/Users/apetrone/Documents/gemini/assets", recursive=True)
-# 	observer.start()
-
-# 	import time
-# 	import sys
-# 	try:
-# 		while True:
-# 			time.sleep(1)
-# 	except KeyboardInterrupt:
-# 		observer.stop()
-
-# 	observer.join()	
-
 if __name__ == "__main__":
 	main()
-		
-	#monitor_test()
