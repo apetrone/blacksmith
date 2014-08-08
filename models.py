@@ -65,6 +65,7 @@ class AttributeStore(object):
 			else:
 				self.__dict__[key] = value
 
+
 class Tool(object):
 	def __init__(self, *args, **kwargs):
 		self.name = kwargs.get("name", None)

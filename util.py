@@ -6,6 +6,11 @@ import platform
 def clean_path(path):
 	return strip_trailing_slash(path)
 
+def clear_cache(cache_path):
+ if os.path.exists(cache_path):
+		logging.info("clearing cache at %s" % cache_path)
+		os.unlink(cache_path)
+
 def generate_params_for_file(
 		paths, 
 		asset, 
@@ -66,7 +71,31 @@ def get_platform():
 		return "unknown"
 
 
+def load_cache(cache_path):
+	if os.path.exists(cache_path):
+		logging.info("Reading cache from %s..." % cache_path)
+		with open(cache_path, "rb") as file:
+			cache = json.load(file)
+			file.close()
+		return cache
 
+	return {}
+
+def load_tools(config_path, tools):
+	""" load tools and treat tools as a path if it happens to be a string.
+		Otherwise, return it, because it's not what we're expecting.
+	"""
+	if tools and type_is_string(tools):
+		base_path = os.path.dirname(config_path)
+		#logging.info( "base_path = %s" % base_path )
+		#logging.info( "config.tools = %s" % config.tools )
+		abs_tools_path = os.path.abspath(
+			os.path.join(base_path, tools_path)
+		)
+		logging.info("Importing tools from %s..." % abs_tools_path)
+		return load_config(abs_tools_path)
+
+	return tools
 
 def make_dirs(target_path, chmod=0775):
 	try:

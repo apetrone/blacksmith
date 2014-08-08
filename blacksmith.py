@@ -7,8 +7,10 @@ import logging
 import re
 import time
 
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+#import watchdog
+#from watchdog.events import FileSystemEventHandler, LoggingEventHandler
+#from watchdog.observers import Observer
+
 
 from models import (
 	AssetFolder,
@@ -20,8 +22,11 @@ from models import (
 
 from util import(
 	clean_path,
+	clear_cache,
 	generate_params_for_file,
 	get_platform,
+	load_cache,
+	load_tools,
 	make_dirs,
 	run_as_shell,
 	setup_environment,
@@ -29,6 +34,39 @@ from util import(
 	strip_trailing_slash,
 	type_is_string
 )
+
+
+
+# class Apprentice(watchdog.events.FileSystemEventHandler):
+# 	"""
+# 		The apprentice will help us out by monitoring the paths we
+# 		are interested in.
+# 	"""
+
+# 	def show_event(self, event):
+# 		logging.info("event_type: %s" % event.event_type)
+# 		logging.info("is_directory: %s" % event.is_directory)
+# 		logging.info("src_path: %s" % event.src_path)
+
+# 		if hasattr(event, "dest_path"):
+# 			logging.info("dest_path: %s" % event.dest_path)
+
+# 	def on_created(self, event):
+# 		self.show_event(event)
+
+# 	def on_deleted(self, event):
+# 		self.show_event(event)
+
+# 	def on_modified(self, event):
+# 		self.show_event(event)
+
+# 	def on_moved(self, event):
+# 		self.show_event(event)
+
+
+
+
+
 
 included_configs = []
 def load_config(path):
@@ -74,7 +112,6 @@ def main():
 	settings = AttributeStore()
 	tools = {}
 	asset_folders = []
-	cache = {}
 	alter_code = {0: "A", 1:"M", 2:"O"}
 	log_levels = {
 		"debug" : logging.DEBUG,
@@ -109,6 +146,14 @@ def main():
 		action="store_true"
 	)
 
+	p.add_argument(
+		"-m",
+		"--monitor",
+		dest="monitor",
+		action="store_true",
+		help="Monitor directories for changes and execute tools"
+	)
+
 	args = p.parse_args()
 
 	# sort out the log level
@@ -125,33 +170,19 @@ def main():
 
 	if not args.platform:
 		args.platform = get_platform()
-		logging.info("Platform defaulting to: %s" % args.platform)
+		logging.info("Host Platform is \"%s\"" % args.platform)
 
-	# attempt to load the tools via the tool path
-	if config.tools and type_is_string(config.tools):
-		base_path = os.path.dirname(args.config_path)
-		#logging.info( "base_path = %s" % base_path )
-		#logging.info( "config.tools = %s" % config.tools )
-		abs_tools_path = os.path.abspath(
-			os.path.join(base_path, config.tools)
-		)
-		logging.info("Importing tools from %s..." % abs_tools_path)
-		config.tools = load_config(abs_tools_path)
+	# load tools
+	config.tools = load_tools(args.config_path, getattr(config, "tools", None))
 
-	# load cache
+	# get cache path
 	cache_path = os.path.splitext(args.config_path)[0] + ".cache"
 
-	if args.clear_cache and os.path.exists(cache_path):
-		logging.info("clearing cache at %s" % cache_path)
-		os.unlink(cache_path)
+	if args.clear_cache:
+		clear_cache(cache_path)
 	
-	if os.path.exists(cache_path):
-		logging.info("Reading cache from %s..." % cache_path)
-		file = open(cache_path, "rb")
-		cache = json.load(file)
-		file.close()
-	elif not args.clear_cache:
-		logging.warn("No cache at %s" % cache_path)
+	# load cache
+	cache = load_cache(cache_path)
 
 	# conform all paths
 	if getattr(config, "paths", None):
@@ -275,5 +306,27 @@ def main():
 	logging.info("Complete.")
 	logging.info("Modified / Total - %i/%i" % (modified_files, total_files))
 
+
+# def monitor_test():
+# 	logging.basicConfig(level=logging.INFO)
+	
+
+# 	event_handler = Apprentice()
+# 	observer = Observer()
+# 	observer.schedule(event_handler, "/Users/apetrone/Documents/gemini/assets", recursive=True)
+# 	observer.start()
+
+# 	import time
+# 	import sys
+# 	try:
+# 		while True:
+# 			time.sleep(1)
+# 	except KeyboardInterrupt:
+# 		observer.stop()
+
+# 	observer.join()	
+
 if __name__ == "__main__":
 	main()
+		
+	#monitor_test()
