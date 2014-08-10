@@ -54,8 +54,8 @@ class AttributeStore(object):
 			setattr(self, key, kwargs[key])
 
 	def __iter__(self):
-		for i in self.__dict__.items():
-			yield i
+		for i, v in self.__dict__.items():
+			yield i, v
 
 	def merge(self, other):
 		for key, value in other.__dict__.iteritems():
@@ -74,6 +74,10 @@ class AttributeStore(object):
 					)
 			else:
 				self.__dict__[key] = value
+
+	def dump(self):
+		for key, value in self.__dict__.iteritems():
+			logging.info("%s -> %s" % (key, value))
 
 class Cache(object):
 	CACHE_EXTENSION = "cache"
@@ -158,6 +162,44 @@ class Cache(object):
 	def remove(self):
 		if os.path.exists(self.abs_cache_path):
 			os.unlink(self.abs_cache_path)
+
+class KeyValueCache(object):
+	def __init__(self):
+		self.cache = {}
+
+	def contains(self, key):
+		return key in self.cache
+
+	def set(self, key, value):
+		self.cache[key] = value
+
+	def get(self, key):
+		if self.contains(key):
+			return self.cache[key]
+		else:
+			return None
+
+	def dump(self):
+		for key, value in self.cache.iteritems():
+			logging.info("%s -> %s" % (key, value))
+	
+class WorkingDirectory(object):
+	directory_stack = [""]
+
+	@classmethod
+	def current_directory(cls):
+		return cls.directory_stack[-1]
+
+	@classmethod
+	def push(cls, path):
+		cls.directory_stack.append(path)
+		#traceback.print_stack()
+		#logging.info("[PUSH]: %s" % path)
+
+	@classmethod
+	def pop(cls):
+		#logging.info("[POP]: %s" % cls.directory_stack[-1])
+		return cls.directory_stack.pop()
 
 class Tool(object):
 	def __init__(self, *args, **kwargs):

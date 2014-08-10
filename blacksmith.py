@@ -6,13 +6,16 @@ from glob import iglob
 import logging
 import re
 import time
+import copy
 
 from models import (
 	AssetFolderMask,
 	AttributeStore,
 	Cache,
 	CopyTool,
+	KeyValueCache,
 	MoveTool,
+	WorkingDirectory,
 	Tool,
 	UnknownToolException
 )
@@ -24,44 +27,94 @@ from util import(
 	load_tools,
 	make_dirs,
 	normalize_paths,
+	replace_variables,
 	run_as_shell,
 	setup_environment,
 	strip_trailing_slash,
 	type_is_string
 )
 
+CONFIG_TYPE_MAP = {
+	"paths": [dict],
+	"tools": [dict],
+	"assets": [dict],
+	"host_platform": [str, unicode],
+	"target_platform": [str, unicode]
+}
+INCLUDE_KEYWORD = "include"
+
+def verify_config(config, type_map):
+	for key, _ in config.iteritems():
+		if key in type_map:
+			t = type(config[key])
+			allowed_types = type_map[key]
+			if t not in allowed_types:
+				raise Exception("%s not valid type for %s" % (t, key))
 
 
-included_configs = []
-def load_config(path):
-	global included_configs
+def handle_includes(config_cache, config, type_map):
+	# only examine the top level keys for the include keyword.
 
+	source_dict = copy.copy(config)
+
+	for source_key, value_data in source_dict.iteritems():
+		if type(value_data) is dict:
+			if INCLUDE_KEYWORD in value_data:
+				value = value_data[INCLUDE_KEYWORD]
+				if not (type_is_string(value) or type(value) is list):
+					raise Exception(
+						"%s keyword requires a string or list type!"
+						% value_data
+					)
+
+				include_list = []
+				if type_is_string(value):
+					include_list = [value]
+				else:
+					include_list = value
+
+				for include_path in include_list:
+					included_config = load_config(
+						include_path, 
+						config_cache
+					)
+					result = handle_includes(
+						config_cache,
+						included_config,
+						type_map
+					)
+					config[source_key] = result
+	return config
+
+def load_config(path, config_cache):
 	config = None
-	path = os.path.abspath(path)
-	if os.path.exists(path) and (path not in included_configs):
-		included_configs.append(path)
 
-		with open(path, "rb") as file:
-			cfg = json.load(file)
-		
-		config = AttributeStore(cfg)
+	abs_path = os.path.abspath(
+		os.path.join(WorkingDirectory.current_directory(),
+		path)
+	)
 
-		if getattr(config, "include", None):
-			# assume an include is relative
-			base_path = os.path.dirname(path)
-			config_path = os.path.abspath(
-				os.path.join(base_path,config.include)
-			)
-			newconfig = load_config(config_path)
+	WorkingDirectory.push(os.path.dirname(path))
 
-			if newconfig:
-				newconfig.merge(config)
-				return newconfig
+	# check the cache first
+	if config_cache.contains(abs_path):
+		return config_cache.get(abs_path)
+
+	# need to load it from disk
+	if os.path.exists(abs_path):
+		with open(abs_path, "rb") as file:
+			data_dict = json.load(file)
+
+		config_cache.set(abs_path, data_dict)
+
+		config = handle_includes(config_cache, data_dict, CONFIG_TYPE_MAP)
 	else:
+
 		logging.error(
-			"load_config: config \"%s\" does not exist or was "
-			"already included." % path
+			"load_config: config \"%s\" does not exist" % abs_path
 		)
+
+	WorkingDirectory.pop()
 
 	return config
 
@@ -102,31 +155,16 @@ def monitor_assets(
 			self.platform = platform
 
 		def show_event(self, event):
-			# logging.info("event_type: %s" % event.event_type)
-			# logging.info("is_directory: %s" % event.is_directory)
-			# 
-			# logging.info("src_path: %s" % event.src_path)
-
-
-			# if hasattr(event, "dest_path"):
-				# logging.info("dest_path: %s" % event.dest_path)
-
 			target_path = event.src_path
 			if hasattr(event, "dest_path"):
 				target_path = event.dest_path
 
-			# logging.info("target_path: %s" % target_path)
-
 			for asset in asset_folders:
 				match = re.search(asset.get_abs_regex(), target_path)
 				if match:
-					# logging.info("-> %s" % asset.get_abs_regex())
-					# logging.info(asset.glob)
-
 					# try to update the cache
 					if not self.cache.update(target_path):
 						break
-
 
 					if self.tools.has_key(asset.tool):
 						tool = tools[asset.tool]
@@ -143,7 +181,6 @@ def monitor_assets(
 					)
 
 					execute_commands(self.tools, tool, params)
-					#tool.execute(params)
 					break
 
 		def on_created(self, event):
@@ -158,7 +195,7 @@ def monitor_assets(
 		def on_moved(self, event):
 			self.show_event(event)
 
-	logging.info("Monitoring assets in: %s..." % settings.paths.source_assets)
+	logging.info("Monitoring assets in: %s..." % settings.paths.source_root)
 
 	event_handler = Apprentice(
 		cache,
@@ -169,7 +206,7 @@ def monitor_assets(
 	)
 
 	observer = Observer()
-	observer.schedule(event_handler, settings.paths.source_assets, recursive=True)
+	observer.schedule(event_handler, settings.paths.source_root, recursive=True)
 	observer.start()
 
 	import time
@@ -281,12 +318,10 @@ def main():
 	)
 
 	args = p.parse_args()
-
-	# initialize logging
-	logging.basicConfig(level=logging.INFO)
+	config_cache = KeyValueCache()
 
 	# load config
-	config = load_config(args.config_path)
+	config = AttributeStore(load_config(args.config_path, config_cache))
 
 	if not args.platform:
 		args.platform = get_platform()
@@ -332,8 +367,8 @@ def main():
 		)
 		asset_folder = AssetFolderMask(**data)
 		asset_folder.make_folders_absolute(
-			settings.paths.source_assets, 
-			settings.paths.compiled_assets
+			settings.paths.source_root, 
+			settings.paths.destination_root
 		)
 		asset_folders.append(asset_folder)
 	logging.info("Loaded %i asset folders." % len(asset_folders))
@@ -361,4 +396,7 @@ def main():
 	cache.save()
 
 if __name__ == "__main__":
+	# initialize logging
+	logging.basicConfig(level=logging.INFO)
+
 	main()

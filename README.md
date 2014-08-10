@@ -12,7 +12,7 @@ The solution is to have a script process everything and put it in the correct pl
 
 Write an assetconfig file and then point blacksmith to it.
 
-You specify asset directories relative to the source_assets folder. In doing so, you also provide a wild card to match files. For each file in this directory that matches the wild card, a 'tool' will be executed on that file.
+You specify asset directories relative to the source_root folder. In doing so, you also provide a wild card to match files. For each file in this directory that matches the wild card, a 'tool' will be executed on that file.
 
 You can define a separate tools configuration if you need to call custom commandline tools. (See the example below)
 
@@ -22,8 +22,8 @@ An asset config file is divided into three sections. Paths, Tools, and Assets.
 
 ## Paths
 There are three paths that are required when writing this file.
-source_assets - root where the source assets can be found.
-compiled_assets - root where the 'final' version of the files will be placed
+source_root - root where the source assets can be found.
+destination_root - root where the 'final' version of the files will be placed
 tool_path - This can be a single string or list of strings to append to the PATH environment variable when executing tools
 NOTE: These paths are now RELATIVE to the specified configuration file.
 
@@ -57,7 +57,7 @@ At the moment, there is only one built-in tool, "copy". This copies a file from 
 
 ## Assets
 The "key" in this section, should be a relative-folder name with wild card matching pattern.
-If your source_assets folder had a folder called "textures" and you only wanted to operate on PNG files in that folder, you would specify this as follows:
+If your source_root folder had a folder called "textures" and you only wanted to operate on PNG files in that folder, you would specify this as follows:
 
 	"textures/*.png" :
 	{
@@ -95,8 +95,8 @@ Also worth noting is that you can change the destination folder name. I keep pla
 	{
 		"paths":
 		{
-			"compiled_assets" : "build",
-			"source_assets" : "assets",
+			"destination_root" : "build",
+			"source_root" : "assets",
 			"tool_path" : "tools/bin"
 		},
 
