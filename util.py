@@ -1,7 +1,9 @@
 import os
 import json
+import shlex
 import logging
 import platform
+import subprocess
 
 def clean_path(path):
 	return strip_trailing_slash(path)
