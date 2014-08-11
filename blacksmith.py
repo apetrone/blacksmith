@@ -139,6 +139,12 @@ def monitor_assets(
 		logging.error("Unable to import watchdog. It is required for monitoring!")
 		raise
 
+
+
+	# experimental for reload requests (should use requests lib)
+	import httplib
+
+
 	class Apprentice(watchdog.events.FileSystemEventHandler):
 		"""
 			The apprentice will help us out by monitoring the paths we
@@ -151,13 +157,15 @@ def monitor_assets(
 				settings,
 				asset_folders,
 				tools,
-				platform
+				platform,
+				enable_reload = False
 			):
 			self.cache = cache
 			self.settings = settings
 			self.asset_folders = asset_folders
 			self.tools = tools
 			self.platform = platform
+			self.send_reload_requests = enable_reload
 
 		def show_event(self, event):
 			target_path = event.src_path
@@ -186,6 +194,22 @@ def monitor_assets(
 						target_path,
 						self.platform
 					)
+
+					# get the relative asset path from the source_root
+					# to the asset being modified.
+					relative_path = os.path.relpath(target_path, settings.paths.source_root)
+
+					if self.send_reload_requests:
+						request_packet = {
+							"resource": relative_path
+						}
+						SERVER_HOST = "localhost"
+						SERVER_PORT = 1983
+						connection = httplib.HTTPConnection(SERVER_HOST, SERVER_PORT)
+						connection.request("PUT", "/reload", json.dumps(request_packet))
+						response = connection.getresponse()
+						if response.status != 204 and response.status != 200:
+							logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
 					break
 
 		def on_created(self, event):
@@ -207,7 +231,8 @@ def monitor_assets(
 		settings,
 		asset_folders,
 		tools,
-		platform
+		platform,
+		False
 	)
 
 	observer = Observer()
