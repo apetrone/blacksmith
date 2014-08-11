@@ -1,4 +1,6 @@
 import os
+import re
+import copy
 import json
 import shlex
 import logging
@@ -8,25 +10,77 @@ import subprocess
 def clean_path(path):
 	return strip_trailing_slash(path)
 
-def execute_commands(tools, current_tool, params):
+def recursive_update(root, params):
+	for key, value in root.iteritems():
+		if type_is_string(value):
+			root[key] = value % params
+		elif type(value) is dict:
+			recursive_update(value, params)
+
+def execute_commands(
+	tools, 
+	current_tool,
+	paths,
+	asset,
+	target_path,
+	platform_name,
+	param_overrides = {}
+	):
 	lines = []
 
-	for raw_command in current_tool.commands:
-		try:
-			cmd = (raw_command % params).encode("ascii")
-			lines.append(cmd)
-		except TypeError as exc:
-			logging.error(raw_cmd)
-			logging.error(params)			
 
-		logging.info(cmd)
-		runnable = shlex.split(cmd)
-		try:
-			returncode = subprocess.call(runnable, shell=run_as_shell())
-			if returncode != 0:
-				logging.error("ERROR %s" % cmd)
-		except OSError as exc:
-			logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
+	#logging.info(current_tool.name)
+	for raw_command in current_tool.commands[platform_name]:
+		params = generate_params_for_file(
+			paths, 
+			asset,
+			target_path,
+			platform_name
+		)
+
+		params.update(param_overrides)
+		recursive_update(params, params)
+
+		if type_is_string(raw_command):		
+			try:
+				cmd = (raw_command % params).encode("ascii")
+				lines.append(cmd)
+			except TypeError as exc:
+				logging.error(raw_cmd)
+				logging.error(params)			
+
+			#logging.info(cmd)
+			
+			runnable = shlex.split(cmd)
+			try:
+				returncode = subprocess.call(runnable, shell=run_as_shell())
+				if returncode != 0:
+					logging.error("ERROR %s" % cmd)
+			except OSError as exc:
+				logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
+			
+		elif type(raw_command) is dict:
+			if not "tool" in raw_command:
+				raise Exception("Missing tool from command block! (%s)",
+					current_tool.name
+				)
+
+			# dictionaries in commands are interpreted as tools.
+			# get the tool name and use the params it provides
+			# as overrides.
+			subtool = tools[raw_command["tool"]]
+			sub_overrides = {}
+			if "params" in raw_command:
+				sub_overrides = raw_command["params"]
+			execute_commands(
+				tools,
+				subtool,
+				paths,
+				asset,
+				target_path,
+				platform_name,
+				sub_overrides
+			)
 
 def generate_params_for_file(
 		paths, 
@@ -35,7 +89,12 @@ def generate_params_for_file(
 		platform_name
 	):
 	# base parameters are from the asset block
-	params = asset.params
+	params = copy.copy(asset.params)
+
+	for key, value in paths:
+		params[key] = value
+
+	# TODO: need to also take variables from root conf
 
 	basename = os.path.basename(src_file_path)
 
@@ -60,7 +119,7 @@ def generate_params_for_file(
 	params["abs_src_folder"] = asset.abs_src_folder
 	params["abs_dst_folder"] = asset.abs_dst_folder
 
-	params["platform"] = platform_name
+	params["host_platform"] = platform_name
 
 	return params
 
@@ -76,23 +135,12 @@ def get_platform():
 	else:
 		return "unknown"
 
-
-
-def load_tools(config_path, tools):
-	""" load tools and treat tools as a path if it happens to be a string.
-		Otherwise, return it, because it's not what we're expecting.
-	"""
-	if tools and type_is_string(tools):
-		base_path = os.path.dirname(config_path)
-		#logging.info( "base_path = %s" % base_path )
-		#logging.info( "config.tools = %s" % config.tools )
-		abs_tools_path = os.path.abspath(
-			os.path.join(base_path, tools_path)
-		)
-		logging.info("Importing tools from %s..." % abs_tools_path)
-		return load_config(abs_tools_path)
-
-	return tools
+def get_supported_platforms():
+	return [
+		"linux",
+		"macosx",
+		"windows"
+	]
 
 def make_dirs(target_path, chmod=0775):
 	try:
@@ -117,6 +165,8 @@ def normalize_paths(base_path, path_list):
 	paths = {}
 
 	for key in path_list:
+		if not path_list[key]:
+			continue
 		if type_is_string(path_list[key]):
 			value = clean_path(path_list[key])
 			value = os.path.abspath(os.path.join(base_path, value))
@@ -136,8 +186,6 @@ def normalize_paths(base_path, path_list):
 
 	return paths
 
-def replace_variables(format, vars):
-	return format
 
 def run_as_shell():
 	is_shell = False

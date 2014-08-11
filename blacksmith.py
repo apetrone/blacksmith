@@ -12,9 +12,7 @@ from models import (
 	AssetFolderMask,
 	AttributeStore,
 	Cache,
-	CopyTool,
 	KeyValueCache,
-	MoveTool,
 	WorkingDirectory,
 	Tool,
 	UnknownToolException
@@ -24,10 +22,8 @@ from util import(
 	execute_commands,
 	generate_params_for_file,
 	get_platform,
-	load_tools,
 	make_dirs,
 	normalize_paths,
-	replace_variables,
 	run_as_shell,
 	setup_environment,
 	strip_trailing_slash,
@@ -58,6 +54,7 @@ def handle_includes(config_cache, config, type_map):
 	source_dict = copy.copy(config)
 
 	for source_key, value_data in source_dict.iteritems():
+		# source_key is any top-level key. "paths", "tools", "assets"
 		if type(value_data) is dict:
 			if INCLUDE_KEYWORD in value_data:
 				value = value_data[INCLUDE_KEYWORD]
@@ -83,7 +80,11 @@ def handle_includes(config_cache, config, type_map):
 						included_config,
 						type_map
 					)
-					config[source_key] = result
+
+					del config[source_key][INCLUDE_KEYWORD]
+					final_data = config[source_key]
+					final_data.update(result)
+					config[source_key] = final_data
 	return config
 
 def load_config(path, config_cache):
@@ -103,7 +104,11 @@ def load_config(path, config_cache):
 	# need to load it from disk
 	if os.path.exists(abs_path):
 		with open(abs_path, "rb") as file:
-			data_dict = json.load(file)
+			try:
+				data_dict = json.load(file)
+			except:
+				logging.info("error reading %s" % abs_path)
+				raise
 
 		config_cache.set(abs_path, data_dict)
 
@@ -173,14 +178,14 @@ def monitor_assets(
 							"Unknown tool \"%s\"" % asset.tool
 						)
 
-					params = generate_params_for_file(
-						self.settings.paths, 
+					execute_commands(
+						self.tools, 
+						tool, 
+						self.settings.paths,
 						asset,
 						target_path,
 						self.platform
 					)
-
-					execute_commands(self.tools, tool, params)
 					break
 
 		def on_created(self, event):
@@ -238,7 +243,7 @@ def iterate_assets(
 				asset.abs_src_folder, 
 				asset.glob
 			)
-			logging.debug("Processing: \"%s\"" % search_path)
+			#logging.info("Processing: \"%s\"" % search_path)
 			
 			if tools.has_key(asset.tool):
 				tool = tools[asset.tool]
@@ -263,13 +268,14 @@ def iterate_assets(
 
 				modified_files += 1
 
-				params = generate_params_for_file(
-					settings.paths, 
+				execute_commands(
+					tools, 
+					tool, 
+					settings.paths,
 					asset,
 					src_file_path,
 					platform
 				)
-				tool.execute(params)
 
 		except UnknownToolException as e:
 			logging.warn(e.message)
@@ -328,7 +334,13 @@ def main():
 		logging.info("Host Platform is \"%s\"" % args.platform)
 
 	# load tools
-	config.tools = load_tools(args.config_path, getattr(config, "tools", None))
+	tools_path = os.path.abspath(
+		os.path.join(
+		WorkingDirectory.current_directory(),
+		os.path.dirname(__file__),
+		"tools.conf"
+		)
+	)
 
 	# get cache path
 	cache = Cache(args.config_path, remove=args.clear_cache)	
@@ -344,20 +356,13 @@ def main():
 	setup_environment(config.paths)
 	
 	# parse all tools
-	if type(config.tools) == dict:
-		for name in config.tools:
-			tool = Tool(name=name, data=config.tools[name])
-			tools[name] = tool
-	else:
-		for name, data in config.tools:
-			tool = Tool(name=name, data=data)
-			tools[name] = tool
-	logging.info("Loaded %i tools." % len(tools.items()))
+	Tool.load_tools(
+		tools,
+		tools_path,
+		config.tools
+	)
 
-	# add internal tools
-	for klass in Tool.__subclasses__():
-		instance = klass()
-		tools[instance.name] = instance
+	logging.info("Loaded %i tools." % len(tools.items()))
 
 	# parse asset folders
 	for asset_glob in config.assets:

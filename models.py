@@ -8,6 +8,7 @@ import subprocess
 
 from util import (
 	get_platform,
+	get_supported_platforms,
 	run_as_shell
 )
 
@@ -150,7 +151,7 @@ class Cache(object):
 
 		logging.info(
 			"%c -> %s" %
-		 	(Cache.ALTER_TABLE[status], abs_asset_path)
+			(Cache.ALTER_TABLE[status], abs_asset_path)
 		)
 
 		self.cache[abs_asset_path] = modtime
@@ -202,6 +203,24 @@ class WorkingDirectory(object):
 		return cls.directory_stack.pop()
 
 class Tool(object):
+
+	@staticmethod
+	def load_tools(tools, abs_tool_path, config_tools):
+		"""
+			Load internal tools from the install root.
+		"""
+		tool_data = None
+		if os.path.exists(abs_tool_path):
+			with open(abs_tool_path, "rb") as file:
+				tool_data = json.load(file)
+
+		if type(config_tools) == dict:
+			tool_data.update(config_tools)
+
+		for name in tool_data:
+			tool = Tool(name=name, data=tool_data[name])
+			tools[name] = tool
+
 	def __init__(self, *args, **kwargs):
 		self.name = kwargs.get("name", None)
 		
@@ -210,54 +229,15 @@ class Tool(object):
 			logging.warn("Tool data missing! Unable to parse tool.")
 			raise Exception("Missing tool data")
 
-		self.platforms = data.get("platforms", None)
-		self.commands = data.get("commands", [])
+		self.commands = {}
+		platforms = get_supported_platforms()
+
+		for platform_name in platforms:
+			self.commands[platform_name] = data.get(platform_name, None)
+	
 
 	def __str__(self):
 		return "Tool [Name=%s, Commands=%i]" % (self.name, len(self.commands))
 
 	def execute(self, params):
-		if self.platforms and params["platform"] in self.platforms:
-			params["tool"] = self.platforms[params["platform"]]
-		else:
-			# no platforms specified for this tool; default to the tool name
-			params["tool"] = self.name
-
-		for raw_cmd in self.commands:
-			try:
-				cmd = (raw_cmd % params).encode("ascii")
-			except TypeError as e:
-				logging.error(raw_cmd)
-				logging.error(params)
-
-			runnable = shlex.split(cmd)
-			try:			
-				returncode = subprocess.call(runnable, shell=run_as_shell())
-				if returncode != 0:
-					logging.error("ERROR %s" % cmd)
-			except OSError as exc:
-				logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
-
-class CopyTool(Tool):
-	def __init__(self):
-		super(CopyTool, self).__init__(name="copy", data={})
-
-	def execute(self, params):
-		try:
-			# logging.debug(
-			# 	"[COPY] %s -> %s" %
-			# 	(params["src_file_path"], params["dst_file_path"])
-			# )
-			shutil.copyfile(params["src_file_path"], params["dst_file_path"])
-		except IOError as exc:
-			logging.info("IOError: %s" % exc)
-
-class MoveTool(Tool):
-	def __init__(self):
-		super(MoveTool, self).__init__(name="move", data={})
-
-	def execute(self, params):
-		try:
-			shutil.move(params["src_file_path"], params["dst_file_path"])
-		except:
-			raise
+		pass
