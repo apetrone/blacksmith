@@ -193,7 +193,7 @@ def monitor_assets(
 							"Unknown tool \"%s\"" % asset.tool
 						)
 
-					execute_commands(
+					outputs = execute_commands(
 						self.tools, 
 						tool, 
 						self.settings.paths,
@@ -204,7 +204,7 @@ def monitor_assets(
 
 					# get the relative asset path from the source_root
 					# to the asset being modified.
-					relative_path = os.path.relpath(target_path, settings.paths.source_root)
+					relative_path = os.path.relpath(outputs[0], settings.paths.destination_root)
 
 					if self.send_reload_requests:
 						request_packet = {

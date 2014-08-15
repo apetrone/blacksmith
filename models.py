@@ -235,6 +235,7 @@ class Tool(object):
 		for platform_name in platforms:
 			self.commands[platform_name] = data.get(platform_name, None)
 	
+		self.output = data.get("output", "")
 
 	def __str__(self):
 		return "Tool [Name=%s, Commands=%i]" % (self.name, len(self.commands))

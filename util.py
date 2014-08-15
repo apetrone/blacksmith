@@ -30,6 +30,7 @@ def execute_commands(
 
 
 	#logging.info(current_tool.name)
+	outputs = []
 	for raw_command in current_tool.commands[platform_name]:
 		params = generate_params_for_file(
 			paths, 
@@ -59,6 +60,9 @@ def execute_commands(
 			except OSError as exc:
 				logging.error("ERROR executing \"%s\", %s" % (cmd, exc))
 			
+			# record the output as the absolute destination path
+			outputs.append(current_tool.output % params)
+			
 		elif type(raw_command) is dict:
 			if not "tool" in raw_command:
 				raise Exception("Missing tool from command block! (%s)",
@@ -81,6 +85,8 @@ def execute_commands(
 				platform_name,
 				sub_overrides
 			)
+
+	return outputs
 
 def generate_params_for_file(
 		paths, 
