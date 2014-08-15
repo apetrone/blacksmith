@@ -128,7 +128,8 @@ def monitor_assets(
 		settings, 
 		asset_folders,
 		tools, 
-		platform
+		platform,
+		server_url
 	):
 
 	try:
@@ -158,14 +159,20 @@ def monitor_assets(
 				asset_folders,
 				tools,
 				platform,
-				enable_reload = False
+				server_url = None
 			):
 			self.cache = cache
 			self.settings = settings
 			self.asset_folders = asset_folders
 			self.tools = tools
 			self.platform = platform
-			self.send_reload_requests = enable_reload
+			
+			self.server_url = None
+			if server_url and server_url.startswith("http://"):
+				self.server_url = server_url[7:]
+			
+			logging.info(self.server_url)
+			self.send_reload_requests = self.server_url != None
 
 		def show_event(self, event):
 			target_path = event.src_path
@@ -203,10 +210,15 @@ def monitor_assets(
 						request_packet = {
 							"resource": relative_path
 						}
-						SERVER_HOST = "localhost"
-						SERVER_PORT = 1983
-						connection = httplib.HTTPConnection(SERVER_HOST, SERVER_PORT)
-						connection.request("PUT", "/reload", json.dumps(request_packet))
+						
+						post = 80
+						host, uri = self.server_url.split("/")
+						if ":" in host:
+							host, port = host.split(":")
+							port = int(port)
+
+						connection = httplib.HTTPConnection(host, port)
+						connection.request("PUT", ("/" + uri), json.dumps(request_packet))
 						response = connection.getresponse()
 						if response.status != 204 and response.status != 200:
 							logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
@@ -232,7 +244,7 @@ def monitor_assets(
 		asset_folders,
 		tools,
 		platform,
-		False
+		server_url
 	)
 
 	observer = Observer()
@@ -348,6 +360,13 @@ def main():
 		help="Monitor directories for changes and execute tools"
 	)
 
+	p.add_argument(
+		"-u",
+		"--url",
+		dest="server_url",
+		help="Report resource changes to a server via JSON"
+	)
+
 	args = p.parse_args()
 	config_cache = KeyValueCache()
 
@@ -410,7 +429,8 @@ def main():
 			settings,
 			asset_folders,
 			tools,
-			args.platform
+			args.platform,
+			args.server_url
 		)
 	else:
 		# just run through all assets
