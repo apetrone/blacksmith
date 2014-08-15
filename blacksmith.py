@@ -7,6 +7,7 @@ import logging
 import re
 import time
 import copy
+import socket
 
 from models import (
 	AssetFolderMask,
@@ -217,11 +218,17 @@ def monitor_assets(
 							host, port = host.split(":")
 							port = int(port)
 
-						connection = httplib.HTTPConnection(host, port)
-						connection.request("PUT", ("/" + uri), json.dumps(request_packet))
-						response = connection.getresponse()
-						if response.status != 204 and response.status != 200:
-							logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
+						try:
+							connection = httplib.HTTPConnection(host, port)
+							connection.request("PUT", ("/" + uri), json.dumps(request_packet))
+							response = connection.getresponse()
+							if response.status != 204 and response.status != 200:
+								logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
+						except socket.error as exception:
+							pass
+
+						except:
+							raise
 					break
 
 		def on_created(self, event):
