@@ -171,11 +171,10 @@ def monitor_assets(
 			self.server_url = None
 			if server_url and server_url.startswith("http://"):
 				self.server_url = server_url[7:]
-			
-			logging.info(self.server_url)
+
 			self.send_reload_requests = self.server_url != None
 
-		def show_event(self, event):
+		def handle_event(self, event):
 			target_path = event.src_path
 			if hasattr(event, "dest_path"):
 				target_path = event.dest_path
@@ -209,6 +208,7 @@ def monitor_assets(
 
 					if self.send_reload_requests:
 						request_packet = {
+							"type": "file_modified",
 							"resource": relative_path
 						}
 						
@@ -226,22 +226,21 @@ def monitor_assets(
 								logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
 						except socket.error as exception:
 							pass
-
 						except:
 							raise
 					break
 
 		def on_created(self, event):
-			self.show_event(event)
+			self.handle_event(event)
 
 		def on_deleted(self, event):
-			self.show_event(event)
+			self.handle_event(event)
 
 		def on_modified(self, event):
-			self.show_event(event)
+			self.handle_event(event)
 
 		def on_moved(self, event):
-			self.show_event(event)
+			self.handle_event(event)
 
 	logging.info("Monitoring assets in: %s..." % settings.paths.source_root)
 
