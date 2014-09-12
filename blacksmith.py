@@ -351,21 +351,6 @@ def main():
 		action="store_true"
 	)
 
-	p.add_argument(
-		"-m",
-		"--monitor",
-		dest="monitor",
-		action="store_true",
-		help="Monitor directories for changes and execute tools"
-	)
-
-	p.add_argument(
-		"-u",
-		"--url",
-		dest="server_url",
-		help="Report resource changes to a server via JSON"
-	)
-
 	args = p.parse_args()
 	config_cache = KeyValueCache()
 
@@ -421,7 +406,13 @@ def main():
 		asset_folders.append(asset_folder)
 	logging.info("Loaded %i asset folders." % len(asset_folders))
 
-	if args.monitor:
+	# check if we need to enter monitoring mode
+	monitor_mode = hasattr(config, "monitor")
+	if monitor_mode:
+		monitor = config.monitor
+		if not "url" in monitor:
+			raise Exception("Monitor block requires a \"url\" parameter")
+
 		# run monitoring
 		monitor_assets(
 			cache,
@@ -429,7 +420,7 @@ def main():
 			asset_folders,
 			tools,
 			args.platform,
-			args.server_url
+			monitor["url"]
 		)
 	else:
 		# just run through all assets
