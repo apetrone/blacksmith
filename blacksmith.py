@@ -58,19 +58,13 @@ def handle_includes(config_cache, config, type_map):
 		# source_key is any top-level key. "paths", "tools", "assets"
 		if type(value_data) is dict:
 			if INCLUDE_KEYWORD in value_data:
-				value = value_data[INCLUDE_KEYWORD]
-				if not (type_is_string(value) or type(value) is list):
-					raise Exception(
-						"%s keyword requires a string or list type!"
-						% value_data
-					)
-
-				include_list = []
-				if type_is_string(value):
-					include_list = [value]
+				include_list = value_data[INCLUDE_KEYWORD]
+				if type_is_string(include_list):
+					include_list = [include_list]
 				else:
-					include_list = value
+					include_list = include_list
 
+				final_data = config[source_key]
 				for include_path in include_list:
 					included_config = load_config(
 						include_path, 
@@ -81,11 +75,10 @@ def handle_includes(config_cache, config, type_map):
 						included_config,
 						type_map
 					)
-
-					del config[source_key][INCLUDE_KEYWORD]
-					final_data = config[source_key]
 					final_data.update(result)
-					config[source_key] = final_data
+
+				del config[source_key][INCLUDE_KEYWORD]
+				config[source_key] = final_data
 	return config
 
 def load_config(path, config_cache):
