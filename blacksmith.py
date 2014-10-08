@@ -359,7 +359,7 @@ def main():
 
 	if not args.platform:
 		args.platform = get_platform()
-		logging.info("Host Platform is \"%s\"" % args.platform)
+		logging.info("Target Platform is \"%s\"" % args.platform)
 
 	# load tools
 	tools_path = os.path.abspath(
@@ -378,11 +378,13 @@ def main():
 	if getattr(config, "paths", None):
 		base_path = os.path.dirname(os.path.abspath(args.config_path))
 		config.paths = normalize_paths(base_path, config.paths)
-		setattr(settings, "paths", AttributeStore(config.paths))
 
-	# setup environment variables, path, etc.
-	setup_environment(config.paths)
+		# setup environment variables, path, etc.
+		config.paths = setup_environment(config.paths, args.platform)
+
+		setattr(settings, "paths", AttributeStore(config.paths))
 	
+
 	# parse all tools
 	Tool.load_tools(
 		tools,

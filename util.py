@@ -101,10 +101,13 @@ def generate_params_for_file(
 		params[key] = value
 
 	# TODO: need to also take variables from root conf
-
 	basename = os.path.basename(src_file_path)
 
+	params["source_root"] = paths.source_root
+	params["destination_root"] = paths.destination_root
+
 	# default parameters
+	params["src_file_relpath"] = os.path.relpath(src_file_path, paths.source_root)
 	params["src_file_path"] = src_file_path
 	params["src_file_basename"] = basename
 	params["src_file_ext"] = \
@@ -199,9 +202,23 @@ def run_as_shell():
 		is_shell = True
 	return is_shell
 
-def setup_environment(paths):
+def setup_environment(paths, target_platform):
 	# add asset_path to PATH environment var
 	
+	# replace variables
+	vars = {
+		"host_platform": get_platform(),
+		"target_platform": target_platform
+
+	}
+
+	old_paths = copy.copy(paths)
+	paths = {}
+	for path_name, path in old_paths.iteritems():
+		for key, value in vars.iteritems():
+			path = path.replace("${%s}" % key, value)
+			paths[path_name] = path
+
 	if "tool_path" in paths:
 		if type(paths["tool_path"]) is unicode:
 			paths["tool_path"] = [paths["tool_path"]]
@@ -209,6 +226,7 @@ def setup_environment(paths):
 		tool_paths = ":".join(paths["tool_path"])
 		os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
 
+	return paths
 def strip_trailing_slash(path):
 	if path[-1] == "/" or path[-1] == "\\":
 		path = path[:-1]
