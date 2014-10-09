@@ -108,10 +108,10 @@ def load_config(path, config_cache):
 
 		config = handle_includes(config_cache, data_dict, CONFIG_TYPE_MAP)
 	else:
-
-		logging.error(
+		raise Exception(
 			"load_config: config \"%s\" does not exist" % abs_path
 		)
+
 
 	WorkingDirectory.pop()
 
@@ -350,16 +350,37 @@ def main():
 		dest="clear_cache",
 		action="store_true"
 	)
+	p.add_argument(
+		"-s",
+		"--source_root",
+		dest="source_root"
+	)
 
 	args = p.parse_args()
 	config_cache = KeyValueCache()
 
 	# load config
-	config = AttributeStore(load_config(args.config_path, config_cache))
+	config_data = load_config(args.config_path, config_cache)
+	
+	# the source_root can be specified on the command line;
+	# this properly inserts it into the paths dict
+	if "paths" in config_data:
+		if "source_root" not in config_data["paths"]:
+			if not args.source_root:
+				raise Exception(
+						"source_root is missing. This should be defined"
+						" in a config file, or on the command line."
+					)				
+			else:
+				# this path SHOULD be an absolute path
+				config_data["paths"]["source_root"] = args.source_root
+
+	config = AttributeStore(config_data)
 
 	if not args.platform:
 		args.platform = get_platform()
 		logging.info("Target Platform is \"%s\"" % args.platform)
+
 
 	# load tools
 	tools_path = os.path.abspath(
@@ -371,19 +392,18 @@ def main():
 	)
 
 	# get cache path
-	cache = Cache(args.config_path, remove=args.clear_cache)	
+	cache = Cache(args.config_path, remove=args.clear_cache)
 	cache.load()
 
 	# conform all paths
 	if getattr(config, "paths", None):
 		base_path = os.path.dirname(os.path.abspath(args.config_path))
-		config.paths = normalize_paths(base_path, config.paths)
 
 		# setup environment variables, path, etc.
-		config.paths = setup_environment(config.paths, args.platform)
-
+		config.paths = setup_environment(base_path, config.paths, args.platform)
+		
 		setattr(settings, "paths", AttributeStore(config.paths))
-	
+
 
 	# parse all tools
 	Tool.load_tools(

@@ -123,7 +123,6 @@ def generate_params_for_file(
 		asset.dst_folder,
 		basename.split(".")[0]
 	)
-	
 
 	params["abs_src_folder"] = asset.abs_src_folder
 	params["abs_dst_folder"] = asset.abs_dst_folder
@@ -202,14 +201,12 @@ def run_as_shell():
 		is_shell = True
 	return is_shell
 
-def setup_environment(paths, target_platform):
-	# add asset_path to PATH environment var
-	
+def setup_environment(base_path, paths, target_platform):
 	# replace variables
 	vars = {
 		"host_platform": get_platform(),
-		"target_platform": target_platform
-
+		"target_platform": target_platform,
+		"source_root" : paths["source_root"]
 	}
 
 	old_paths = copy.copy(paths)
@@ -219,12 +216,16 @@ def setup_environment(paths, target_platform):
 			path = path.replace("${%s}" % key, value)
 			paths[path_name] = path
 
-	if "tool_path" in paths:
-		if type(paths["tool_path"]) is unicode:
-			paths["tool_path"] = [paths["tool_path"]]
+	# normalize the paths; which makes them absolute from relative
+	# and cleans up separators, etc.
+	paths = normalize_paths(base_path, paths)
 
-		tool_paths = ":".join(paths["tool_path"])
-		os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
+	# if "tool_path" in paths:
+	# 	if type(paths["tool_path"]) is unicode:
+	# 		paths["tool_path"] = [paths["tool_path"]]
+
+	# 	tool_paths = ":".join(paths["tool_path"])
+	# 	os.environ["PATH"] = os.environ["PATH"] + ":" + tool_paths
 
 	return paths
 def strip_trailing_slash(path):
