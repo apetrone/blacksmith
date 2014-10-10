@@ -175,59 +175,64 @@ def monitor_assets(
 			for asset in asset_folders:
 				match = re.search(asset.get_abs_regex(), target_path)
 				if match:
-					# try to update the cache
-					if not self.cache.update(target_path):
-						break
+					try:
+						# try to update the cache
+						if not self.cache.update(target_path):
+							break
 
-					if self.tools.has_key(asset.tool):
-						tool = tools[asset.tool]
-					else:
-						raise UnknownToolException(
-							"Unknown tool \"%s\"" % asset.tool
+						if self.tools.has_key(asset.tool):
+							tool = tools[asset.tool]
+						else:
+							raise UnknownToolException(
+								"Unknown tool \"%s\"" % asset.tool
+							)
+
+						outputs = execute_commands(
+							self.tools, 
+							tool, 
+							self.settings.paths,
+							asset,
+							target_path,
+							self.platform
 						)
 
-					outputs = execute_commands(
-						self.tools, 
-						tool, 
-						self.settings.paths,
-						asset,
-						target_path,
-						self.platform
-					)
+						# get the relative asset path from the source_root
+						# to the asset being modified.
+						relative_path = os.path.relpath(outputs[0], settings.paths.destination_root)
 
-					# get the relative asset path from the source_root
-					# to the asset being modified.
-					relative_path = os.path.relpath(outputs[0], settings.paths.destination_root)
+						if self.send_reload_requests:
+							request_packet = {
+								"type": "file_modified",
+								"resource": relative_path
+							}
+							
+							post = 80
+							host, uri = self.server_url.split("/")
+							if ":" in host:
+								host, port = host.split(":")
+								port = int(port)
 
-					if self.send_reload_requests:
-						request_packet = {
-							"type": "file_modified",
-							"resource": relative_path
-						}
-						
-						post = 80
-						host, uri = self.server_url.split("/")
-						if ":" in host:
-							host, port = host.split(":")
-							port = int(port)
-
-						try:
-							connection = httplib.HTTPConnection(host, port)
-							connection.request("PUT", ("/" + uri), json.dumps(request_packet))
-							response = connection.getresponse()
-							if response.status != 204 and response.status != 200:
-								logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
-						except socket.error as exception:
-							pass
-						except:
-							raise
-					break
+							try:
+								connection = httplib.HTTPConnection(host, port)
+								connection.request("PUT", ("/" + uri), json.dumps(request_packet))
+								response = connection.getresponse()
+								if response.status != 204 and response.status != 200:
+									logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
+							except socket.error as exception:
+								pass
+							except:
+								raise
+						break
+					except:
+						raise
 
 		def on_created(self, event):
 			self.handle_event(event)
 
 		def on_deleted(self, event):
-			self.handle_event(event)
+			# For now, we don't handle deletions
+			pass
+			#self.handle_event(event)
 
 		def on_modified(self, event):
 			self.handle_event(event)
