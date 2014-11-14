@@ -50,9 +50,10 @@ def execute_commands(
 				logging.error(raw_cmd)
 				logging.error(params)			
 
-			#logging.info(cmd)
-			
-			runnable = shlex.split(cmd)
+			# we need this to pass to shlex, otherwise it could screw up
+			# paths on non-posix compliant systems.
+			use_posix_paths = (get_platform() is not "windows")
+			runnable = shlex.split(cmd, posix=use_posix_paths)
 			try:
 				returncode = subprocess.call(runnable, shell=run_as_shell())
 				if returncode != 0:
