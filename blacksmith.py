@@ -168,82 +168,19 @@ def monitor_assets(
 				self.server_url = server_url[7:]
 
 			self.send_reload_requests = self.server_url != None
+			self.queue = []
 
 		def handle_event(self, event):
+			source_path = event.src_path
+			destination_path = ""
+
 			target_path = event.src_path
 			if hasattr(event, "dest_path"):
 				target_path = event.dest_path
+				destination_path = event.dest_path
 
-			for asset in asset_folders:
-				match = re.search(asset.get_abs_regex(), target_path)
-				if match:
-
-					# determine if this is a directory path
-					# a file in a subdirectory
-					source_to_target_path = os.path.relpath(target_path, self.settings.paths.source_root)
-					asset_target_relative = os.path.relpath(source_to_target_path, asset.src_folder)
-					subdir = os.path.sep in asset_target_relative
-					is_directory = os.path.isdir(target_path) or subdir
-
-					if is_directory:
-						# We don't want to perform tree copies for modified files
-						# inside of a subfolder; only do that on the root subfolder.
-						if not subdir:
-							source_path = target_path
-							destination_path = os.path.join(settings.paths.destination_root, asset.dst_folder, asset_target_relative)
-							copy_tree(source_path, destination_path)
-						break
-					
-					try:
-						# try to update the cache
-						if not self.cache.update(target_path):
-							break
-
-						if self.tools.has_key(asset.tool):
-							tool = tools[asset.tool]
-						else:
-							raise UnknownToolException(
-								"Unknown tool \"%s\"" % asset.tool
-							)
-
-						outputs = execute_commands(
-							self.tools, 
-							tool, 
-							self.settings.paths,
-							asset,
-							target_path,
-							self.platform
-						)
-
-						# get the relative asset path from the source_root
-						# to the asset being modified.
-						relative_path = os.path.relpath(outputs[0], settings.paths.destination_root)
-
-						if self.send_reload_requests:
-							request_packet = {
-								"type": "file_modified",
-								"resource": relative_path
-							}
-							
-							post = 80
-							host, uri = self.server_url.split("/")
-							if ":" in host:
-								host, port = host.split(":")
-								port = int(port)
-
-							try:
-								connection = httplib.HTTPConnection(host, port)
-								connection.request("PUT", ("/" + uri), json.dumps(request_packet))
-								response = connection.getresponse()
-								if response.status != 204 and response.status != 200:
-									logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
-							except socket.error as exception:
-								pass
-							except:
-								raise
-						break
-					except:
-						raise
+			#logging.info("%s | %s" % (source_path, destination_path))
+			self.queue.append(target_path)
 
 		def on_created(self, event):
 			self.handle_event(event)
@@ -258,6 +195,82 @@ def monitor_assets(
 
 		def on_moved(self, event):
 			self.handle_event(event)
+
+		def process_events(self):
+			queued_items = self.queue[:]
+			self.queue = []
+
+			for target_path in queued_items:
+				for asset in asset_folders:
+					match = re.search(asset.get_abs_regex(), target_path)
+					if match:
+
+						# determine if this is a directory path
+						# a file in a subdirectory
+						source_to_target_path = os.path.relpath(target_path, self.settings.paths.source_root)
+						asset_target_relative = os.path.relpath(source_to_target_path, asset.src_folder)
+						subdir = os.path.sep in asset_target_relative
+						is_directory = os.path.isdir(target_path) or subdir
+
+						if is_directory:
+							# We don't want to perform tree copies for modified files
+							# inside of a subfolder; only do that on the root subfolder.
+							if not subdir:
+								source_path = target_path
+								destination_path = os.path.join(settings.paths.destination_root, asset.dst_folder, asset_target_relative)
+								copy_tree(source_path, destination_path)
+							break
+						
+						try:
+							# try to update the cache
+							if not self.cache.update(target_path):
+								break
+
+							if self.tools.has_key(asset.tool):
+								tool = tools[asset.tool]
+							else:
+								raise UnknownToolException(
+									"Unknown tool \"%s\"" % asset.tool
+								)
+
+							outputs = execute_commands(
+								self.tools, 
+								tool, 
+								self.settings.paths,
+								asset,
+								target_path,
+								self.platform
+							)
+
+							# get the relative asset path from the source_root
+							# to the asset being modified.
+							relative_path = os.path.relpath(outputs[0], settings.paths.destination_root)
+
+							if self.send_reload_requests:
+								request_packet = {
+									"type": "file_modified",
+									"resource": relative_path
+								}
+								
+								post = 80
+								host, uri = self.server_url.split("/")
+								if ":" in host:
+									host, port = host.split(":")
+									port = int(port)
+
+								try:
+									connection = httplib.HTTPConnection(host, port)
+									connection.request("PUT", ("/" + uri), json.dumps(request_packet))
+									response = connection.getresponse()
+									if response.status != 204 and response.status != 200:
+										logging.warn("Request failed: (%i) %s" % (response.status, response.reason))				
+								except socket.error as exception:
+									pass
+								except:
+									raise
+							break
+						except:
+							raise
 
 	logging.info("Monitoring assets in: %s..." % settings.paths.source_root)
 
@@ -278,7 +291,12 @@ def monitor_assets(
 	import sys
 	try:
 		while True:
-			time.sleep(1)
+			# Wait some time for events to trickle in and file i/o
+			# to complete
+			time.sleep(2)
+
+			# handle events that have been queued
+			event_handler.process_events()
 	except KeyboardInterrupt:
 		observer.stop()
 
