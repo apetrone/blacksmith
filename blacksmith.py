@@ -2,12 +2,13 @@ import os
 import json
 
 import argparse
-from glob import iglob
 import logging
 import re
 import time
 import copy
 import socket
+import fnmatch
+import shutil
 
 from models import (
 	AssetFolderMask,
@@ -295,28 +296,62 @@ def iterate_assets(
 
 			path_created = False
 
-			for src_file_path in iglob(search_path):
+			for root, subs, files in os.walk(asset.abs_src_folder, topdown=True):
+				# filter files based on glob
+				files[:] = fnmatch.filter(files, asset.glob)
+
 				if not path_created:
-					path_created = True
 					# make all asset destination folders
 					make_dirs(asset.abs_dst_folder)
+					path_created = True
 
-				total_files += 1
+				# filter subdirectories based on the glob
+				matched_subs = fnmatch.filter(subs, asset.glob)
 
-				# try to update the cache
-				if not cache.update(src_file_path):
-					continue
+				# do not recurse into subdirectories; none matched
+				if not matched_subs:
+					subs[:] = []
+				else:
+					# The directory has matched the glob.
+					# For now, copy each match over to the destination folder.
+					# This is to specifically handle the case where directories are entire
+					# folders (.dSYM, .app). These specific dirs should be
+					# exceptions where the entire folder is simply copied.
+					for folder in matched_subs:
+						src_file_root = os.path.join(root, folder)
+						dst_file_root = os.path.join(asset.abs_dst_folder, folder)
+						try:
+							# if the path already exists, nuke it
+							if os.path.isdir(dst_file_root):
+								shutil.rmtree(dst_file_root)
 
-				modified_files += 1
+							# copy the tree
+							shutil.copytree(src_file_root, dst_file_root)
+						except OSError as e:
+							import errno
+							if e.errno == errno.EEXIST:
+								pass
+						except:
+							raise
 
-				execute_commands(
-					tools, 
-					tool, 
-					settings.paths,
-					asset,
-					src_file_path,
-					platform
-				)
+				for file in files:
+					src_file_path = os.path.join(root, file)
+
+					total_files += 1
+
+					if not cache.update(src_file_path):
+						continue
+
+					modified_files += 1
+
+					execute_commands(
+						tools, 
+						tool, 
+						settings.paths,
+						asset,
+						src_file_path,
+						platform
+					)
 
 		except UnknownToolException as e:
 			logging.warn(e.message)
