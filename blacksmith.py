@@ -29,7 +29,8 @@ from util import(
 	run_as_shell,
 	setup_environment,
 	strip_trailing_slash,
-	type_is_string
+	type_is_string,
+	copy_tree
 )
 
 CONFIG_TYPE_MAP = {
@@ -176,6 +177,23 @@ def monitor_assets(
 			for asset in asset_folders:
 				match = re.search(asset.get_abs_regex(), target_path)
 				if match:
+
+					# determine if this is a directory path
+					# a file in a subdirectory
+					source_to_target_path = os.path.relpath(target_path, self.settings.paths.source_root)
+					asset_target_relative = os.path.relpath(source_to_target_path, asset.src_folder)
+					subdir = os.path.sep in asset_target_relative
+					is_directory = os.path.isdir(target_path) or subdir
+
+					if is_directory:
+						# We don't want to perform tree copies for modified files
+						# inside of a subfolder; only do that on the root subfolder.
+						if not subdir:
+							source_path = target_path
+							destination_path = os.path.join(settings.paths.destination_root, asset.dst_folder, asset_target_relative)
+							copy_tree(source_path, destination_path)
+						break
+					
 					try:
 						# try to update the cache
 						if not self.cache.update(target_path):
@@ -308,31 +326,17 @@ def iterate_assets(
 				# filter subdirectories based on the glob
 				matched_subs = fnmatch.filter(subs, asset.glob)
 
-				# do not recurse into subdirectories; none matched
-				if not matched_subs:
-					subs[:] = []
-				else:
-					# The directory has matched the glob.
+				# do not recurse into subdirectories
+				subs[:] = []
+
+				if matched_subs:
+					# One or more subdirectories matched the glob.
 					# For now, copy each match over to the destination folder.
 					# This is to specifically handle the case where directories are entire
 					# folders (.dSYM, .app). These specific dirs should be
 					# exceptions where the entire folder is simply copied.
 					for folder in matched_subs:
-						src_file_root = os.path.join(root, folder)
-						dst_file_root = os.path.join(asset.abs_dst_folder, folder)
-						try:
-							# if the path already exists, nuke it
-							if os.path.isdir(dst_file_root):
-								shutil.rmtree(dst_file_root)
-
-							# copy the tree
-							shutil.copytree(src_file_root, dst_file_root)
-						except OSError as e:
-							import errno
-							if e.errno == errno.EEXIST:
-								pass
-						except:
-							raise
+						copy_tree(source_file_root, dst_file_root)
 
 				for file in files:
 					src_file_path = os.path.join(root, file)

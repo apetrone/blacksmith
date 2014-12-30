@@ -236,3 +236,21 @@ def strip_trailing_slash(path):
 
 def type_is_string(value):
 	return type(value) is str or type(value) is unicode
+
+def copy_tree(source, destination):
+	import os
+	import shutil
+
+	try:
+		# if the path already exists, nuke it
+		if os.path.isdir(destination):
+			shutil.rmtree(destination)
+
+		# copy the tree
+		shutil.copytree(source, destination)
+	except OSError as e:
+		import errno
+		if e.errno == errno.EEXIST:
+			pass
+	except:
+		raise	
